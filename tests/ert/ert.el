@@ -302,4 +302,123 @@
             (should (equal (buffer-string) "old"))))
       (delete-directory root t))))
 
+(ert-deftest org-roam-blog-test-relative-url-preserves-layout ()
+  (should
+   (equal
+    (org-roam-blog--relative-url
+     "pages/index.html" "_org/permanent/a b.html")
+    "../_org/permanent/a%20b.html")))
+
+(ert-deftest org-roam-blog-test-redirect-html-uses-relative-store-url ()
+  (let ((html
+         (org-roam-blog--redirect-html
+          '(:title "Index"
+            :redirect-relative "pages/index.html"
+            :store-relative "_org/permanent/id/index.html"))))
+    (should
+     (string-match-p
+      "location\\.replace(\"\\.\\./_org/permanent/id/index\\.html\")"
+      html))
+    (should
+     (string-match-p
+      "rel=\"canonical\" href=\"\\.\\./_org/permanent/id/index\\.html\""
+      html))))
+
+(ert-deftest org-roam-blog-test-sitemap-projects-tags ()
+  (should
+   (equal
+    (org-roam-blog--project-sitemap-tags
+     '("blog" "post" "emacs" "linux")
+     '(:include-tags ("post" "emacs" "linux")
+       :exclude-tags ("post" "linux")))
+    '("emacs"))))
+
+(ert-deftest org-roam-blog-test-default-sitemap-uses-relative-urls ()
+  (let* ((config
+          '(:path "pages/sitemap.html" :title "Posts"
+            :include-tags nil :exclude-tags ("blog")))
+         (entries
+          '((:title "Post" :source-relative "post.org"
+             :store-relative "_org/id/post.html"
+             :tags ("blog" "emacs") :sitemap t)))
+         (prepared
+          (org-roam-blog--prepare-sitemap-entries entries config))
+         (content
+          (org-roam-blog--default-sitemap-content prepared config)))
+    (should
+     (string-match-p
+      "\\[\\[file:\\.\\./_org/id/post\\.html\\]\\[Post\\]\\]"
+      content))
+    (should (string-match-p "(emacs)" content))
+    (should-not (string-match-p "blog" content))))
+
+(ert-deftest org-roam-blog-test-sitemap-content-function-receives-prepared ()
+  (let* ((received nil)
+         (org-roam-blog-sitemap
+          (list :enable t :path "sitemap.html"
+                :include-tags '("emacs")
+                :content-function
+                (lambda (entries _config)
+                  (setq received entries)
+                  "#+TITLE: Custom\n"))))
+    (should
+     (equal
+      (org-roam-blog--sitemap-content
+       '((:title "Post" :store-relative "_org/post.html"
+          :tags ("blog" "emacs") :sitemap t)))
+      "#+TITLE: Custom\n"))
+    (should
+     (equal (plist-get (car received) :tags)
+            '("emacs")))))
+
+(ert-deftest org-roam-blog-test-generated-batch-promotes-entry-pages-last ()
+  (let* ((root (make-temp-file "org-roam-blog-generated-" t))
+         (source (expand-file-name "index.org" root))
+         (publish (expand-file-name "public" root))
+         (temporary (expand-file-name "temporary" root))
+         (store-output
+          (expand-file-name "_org/id/index.html" publish))
+         (org-roam-blog-publish-directory publish)
+         (org-roam-blog-temporary-directory temporary)
+         (org-roam-blog-default-template '(:with-author nil))
+         (org-roam-blog-sitemap
+          '(:enable t :path "sitemap.html" :title "Posts"
+            :sort anti-chronologically
+            :exclude-tags ("blog")))
+         (org-roam-blog-theindex '(:enable nil))
+         (entry
+          (list :title "Index"
+                :source source
+                :source-relative "id/index.org"
+                :store-relative "_org/id/index.html"
+                :store-output store-output
+                :redirect-relative "index.html"
+                :tags '("blog" "index")
+                :sitemap t
+                :template '(:with-author nil))))
+    (unwind-protect
+        (progn
+          (make-directory temporary)
+          (write-region "#+TITLE: Index\n\nBody\n"
+                        nil source nil 'silent)
+          (let ((result
+                 (org-roam-blog--publish-generated-batch
+                  (list entry))))
+            (ert-info ((format "Batch result: %S" result))
+              (should (eq (plist-get result :status) 'success)))
+            (should (file-regular-p store-output))
+            (should
+             (file-regular-p
+              (expand-file-name "sitemap.html" publish)))
+            (should
+             (file-regular-p
+              (expand-file-name "index.html" publish)))
+            (should
+             (equal
+              (plist-get result :promoted)
+              (list store-output
+                    (expand-file-name "sitemap.html" publish)
+                    (expand-file-name "index.html" publish))))))
+      (delete-directory root t))))
+
 ;;; org-roam-blog-test.el ends here

@@ -35,6 +35,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'json)
 (require 'org)
 (require 'ox)
 (require 'ox-html)
@@ -162,8 +163,9 @@ The supported schema is:
 
 Tag options affect only tags displayed by the sitemap and never
 select content.  A nil `:include-tags' value disables the whitelist.
-The content function protocol remains provisional during the first
-implementation."
+When non-nil, `:content-function' is called with the prepared manifest
+entries and this configuration plist, and must return an Org source
+string."
   :type 'plist
   :group 'org-roam-blog)
 
@@ -251,6 +253,16 @@ and paths containing a parent-directory component, are rejected."
 (defun org-roam-blog--encode-url-path (path)
   "Encode each segment of relative URL PATH while preserving slashes."
   (mapconcat #'url-hexify-string (split-string path "/" nil) "/"))
+
+(defun org-roam-blog--relative-url (from-file to-file)
+  "Return an encoded relative URL from FROM-FILE to TO-FILE.
+
+Both arguments are paths relative to the publication root."
+  (unless (and (org-roam-blog--relative-file-p from-file)
+               (org-roam-blog--relative-file-p to-file))
+    (error "Unsafe relative URL paths: %S and %S" from-file to-file))
+  (org-roam-blog--encode-url-path
+   (file-relative-name to-file (file-name-directory from-file))))
 
 (defun org-roam-blog--site-url (relative-path)
   "Return an absolute site URL for RELATIVE-PATH.
@@ -551,6 +563,185 @@ Signal the original export error on failure."
            (org-roam-blog--export-content-entry entry staging)))
    entries))
 
+(defun org-roam-blog--html-attribute-escape (value)
+  "Escape VALUE for a double-quoted HTML attribute."
+  (let ((escaped (org-html-encode-plain-text value)))
+    (setq escaped
+          (replace-regexp-in-string "\"" "&quot;" escaped t t))
+    (replace-regexp-in-string "'" "&#39;" escaped t t)))
+
+(defun org-roam-blog--redirect-html (entry)
+  "Return a static HTML redirect document for manifest ENTRY."
+  (let* ((redirect (plist-get entry :redirect-relative))
+         (store (plist-get entry :store-relative))
+         (target (org-roam-blog--relative-url redirect store))
+         (attribute-target
+          (org-roam-blog--html-attribute-escape target))
+         (title
+          (org-roam-blog--html-attribute-escape
+           (or (plist-get entry :title) "Redirect")))
+         (javascript-target (json-serialize target)))
+    (concat
+     "<!doctype html>\n"
+     "<html lang=\"en\">\n"
+     "<head>\n"
+     "<meta charset=\"utf-8\">\n"
+     "<meta http-equiv=\"refresh\" content=\"0; url="
+     attribute-target "\">\n"
+     "<link rel=\"canonical\" href=\"" attribute-target "\">\n"
+     "<title>" title "</title>\n"
+     "<script>location.replace(" javascript-target ");</script>\n"
+     "</head>\n"
+     "<body><p><a href=\"" attribute-target "\">"
+     title "</a></p></body>\n"
+     "</html>\n")))
+
+(defun org-roam-blog--stage-redirects (entries staging)
+  "Generate redirects for manifest ENTRIES below STAGING.
+
+Return a list of cons cells pairing each entry with its staged
+redirect file."
+  (let (staged)
+    (dolist (entry entries)
+      (when-let* ((relative (plist-get entry :redirect-relative)))
+        (let ((output
+               (org-roam-blog--staging-output staging relative)))
+          (make-directory (file-name-directory output) t)
+          (write-region (org-roam-blog--redirect-html entry)
+                        nil output nil 'silent)
+          (push (cons entry output) staged))))
+    (nreverse staged)))
+
+(defun org-roam-blog--project-sitemap-tags (tags config)
+  "Project TAGS through sitemap CONFIG include and exclude lists."
+  (let ((included (plist-get config :include-tags))
+        (excluded (plist-get config :exclude-tags)))
+    (cl-remove-if
+     (lambda (tag)
+       (or (and included (not (member tag included)))
+           (member tag excluded)))
+     tags)))
+
+(defun org-roam-blog--sitemap-entry-time (entry)
+  "Return a sortable time value from sitemap ENTRY, or nil."
+  (let ((date (plist-get entry :date)))
+    (cond
+     ((null date) nil)
+     ((stringp date)
+      (condition-case nil
+          (org-time-string-to-time date)
+        (error nil)))
+     ((listp date) date)
+     (t nil))))
+
+(defun org-roam-blog--prepare-sitemap-entries (entries config)
+  "Filter and prepare manifest ENTRIES according to sitemap CONFIG."
+  (let ((prepared
+         (mapcar
+          (lambda (entry)
+            (let ((copy (copy-sequence entry)))
+              (plist-put
+               copy :tags
+               (org-roam-blog--project-sitemap-tags
+                (plist-get copy :tags) config))))
+          (cl-remove-if-not
+           (lambda (entry) (plist-get entry :sitemap))
+           entries))))
+    (if (eq (plist-get config :sort) 'anti-chronologically)
+        (cl-stable-sort
+         prepared
+         (lambda (left right)
+           (let ((left-time
+                  (org-roam-blog--sitemap-entry-time left))
+                 (right-time
+                  (org-roam-blog--sitemap-entry-time right)))
+             (cond
+              ((and left-time right-time)
+               (time-less-p right-time left-time))
+              (left-time t)
+              (t nil)))))
+      prepared)))
+
+(defun org-roam-blog--org-link-description (value)
+  "Escape VALUE for use as an Org link description."
+  (replace-regexp-in-string
+   "]" "\\\\]" (replace-regexp-in-string
+                 "[\n\r]+" " " (or value "") t t)
+   t t))
+
+(defun org-roam-blog--default-sitemap-content (entries config)
+  "Return default Org sitemap content for ENTRIES and CONFIG."
+  (let ((path (plist-get config :path))
+        (title (or (plist-get config :title) "Sitemap")))
+    (concat
+     "#+TITLE: " (replace-regexp-in-string "[\n\r]+" " " title t t)
+     "\n\n"
+     (mapconcat
+      (lambda (entry)
+        (let* ((url
+                (org-roam-blog--relative-url
+                 path (plist-get entry :store-relative)))
+               (description
+                (org-roam-blog--org-link-description
+                 (or (plist-get entry :title)
+                     (plist-get entry :source-relative))))
+               (tags (plist-get entry :tags)))
+          (concat "- [[file:" url "][" description "]]"
+                  (when tags
+                    (concat
+                     " ("
+                     (mapconcat
+                      #'org-roam-blog--org-link-description
+                      tags ", ")
+                     ")")))))
+      entries "\n")
+     (when entries "\n"))))
+
+(defun org-roam-blog--sitemap-content (entries)
+  "Return Org sitemap source for manifest ENTRIES.
+
+The configured content function is called as (FUNCTION ENTRIES
+CONFIG), where ENTRIES have already been filtered, sorted, and had
+their displayed tags projected.  It must return an Org source
+string."
+  (let* ((config org-roam-blog-sitemap)
+         (prepared
+          (org-roam-blog--prepare-sitemap-entries entries config))
+         (function
+          (or (plist-get config :content-function)
+              #'org-roam-blog--default-sitemap-content))
+         (content (funcall function prepared config)))
+    (unless (stringp content)
+      (error "Sitemap content function must return a string"))
+    content))
+
+(defun org-roam-blog--stage-sitemap (entries staging)
+  "Generate and stage the configured sitemap from manifest ENTRIES.
+
+Return a cons pairing the sitemap target-relative path with its staged
+file, or nil when sitemap generation is disabled."
+  (when (plist-get org-roam-blog-sitemap :enable)
+    (let* ((relative (plist-get org-roam-blog-sitemap :path))
+           (output
+            (org-roam-blog--staging-output staging relative))
+           (template
+            (org-roam-blog--merge-template
+             org-roam-blog-default-template
+             (plist-get org-roam-blog-sitemap :template))))
+      (make-directory (file-name-directory output) t)
+      (with-temp-buffer
+        (insert (org-roam-blog--sitemap-content entries))
+        (org-mode)
+        ;; `org-mode' establishes buffer-local path state.  Set the
+        ;; virtual source location afterwards so relative links are
+        ;; checked from the staged sitemap's directory.
+        (setq buffer-file-name
+              (org-roam-blog--replace-extension output ".org")
+              default-directory (file-name-directory output))
+        (org-export-to-file
+         'html output nil nil nil nil template))
+      (cons relative output))))
+
 (defun org-roam-blog--promotable-target-p (target)
   "Return non-nil when TARGET may be replaced by generated content.
 
@@ -572,24 +763,46 @@ symlink, or special file.  Return TARGET."
   (copy-file staged target t t nil t)
   target)
 
-(defun org-roam-blog--publish-content-batch (entries)
-  "Stage and promote all content manifest ENTRIES.
+(defun org-roam-blog--publish-generated-batch (entries)
+  "Stage and promote all generated output for manifest ENTRIES.
 
 Return a result plist with `:status', `:staging', `:promoted', and
-`:diagnostics'.  Status is `success' only when every entry was
-generated, promoted, and the staging directory was removed.
+`:diagnostics'.  Status is `success' only when all content, sitemap,
+and redirects were generated, promoted in that order, and the staging
+directory was removed.
 
 Generation failure occurs before promotion and leaves the staging
 directory for inspection.  Promotion failure may leave a partial
 update; the result lists targets already promoted and also preserves
 the staging directory."
+  (when (plist-get org-roam-blog-theindex :enable)
+    (error "Theindex generation is not implemented"))
   (let ((staging (org-roam-blog--make-staging-directory))
-        staged promoted diagnostics)
+        staged-content staged-sitemap staged-redirects
+        promoted diagnostics)
     (condition-case error-data
         (progn
-          (setq staged (org-roam-blog--stage-content entries staging))
-          (dolist (pair staged)
+          (setq staged-content
+                (org-roam-blog--stage-content entries staging)
+                staged-sitemap
+                (org-roam-blog--stage-sitemap entries staging)
+                staged-redirects
+                (org-roam-blog--stage-redirects entries staging))
+          (dolist (pair staged-content)
             (let ((target (plist-get (car pair) :store-output)))
+              (org-roam-blog--promote-file (cdr pair) target)
+              (push target promoted)))
+          (when staged-sitemap
+            (let ((target
+                   (org-roam-blog--output-path
+                    (car staged-sitemap))))
+              (org-roam-blog--promote-file
+               (cdr staged-sitemap) target)
+              (push target promoted)))
+          (dolist (pair staged-redirects)
+            (let ((target
+                   (org-roam-blog--output-path
+                    (plist-get (car pair) :redirect-relative))))
               (org-roam-blog--promote-file (cdr pair) target)
               (push target promoted)))
           (delete-directory staging t)
@@ -607,6 +820,13 @@ the staging directory."
              :staging staging
              :promoted (nreverse promoted)
              :diagnostics (nreverse diagnostics))))))
+
+(defun org-roam-blog--publish-content-batch (entries)
+  "Stage and promote generated output for manifest ENTRIES.
+
+This compatibility wrapper delegates to
+`org-roam-blog--publish-generated-batch'."
+  (org-roam-blog--publish-generated-batch entries))
 
 (defun org-roam-blog--validate-known-plist
     (value allowed subject diagnostics)
