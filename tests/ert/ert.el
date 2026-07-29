@@ -180,4 +180,126 @@
         "Output conflict"
         (plist-get (car diagnostics) :message))))))
 
+(ert-deftest org-roam-blog-test-staging-directory-uses-configured-parent ()
+  (let* ((parent (make-temp-file "org-roam-blog-staging-parent-" t))
+         (org-roam-blog-temporary-directory parent)
+         first second)
+    (unwind-protect
+        (progn
+          (setq first (org-roam-blog--make-staging-directory)
+                second (org-roam-blog--make-staging-directory))
+          (should (org-roam-blog--path-inside-p first parent))
+          (should (org-roam-blog--path-inside-p second parent))
+          (should-not (equal first second))
+          (should
+           (string-match-p
+            "org-roam-blog-[0-9]\\{8\\}T[0-9]\\{6\\}-"
+            (file-name-nondirectory first))))
+      (delete-directory parent t))))
+
+(ert-deftest org-roam-blog-test-content-export-uses-disk-state-and-hooks ()
+  (let* ((root (make-temp-file "org-roam-blog-export-" t))
+         (source (expand-file-name "post.org" root))
+         (staging (expand-file-name "staging" root))
+         (visiting nil)
+         (hook-ran nil)
+         (org-export-before-processing-hook
+          (list (lambda (_backend) (setq hook-ran t))))
+         (entry
+          (list :source source
+                :store-relative "_org/post.html"
+                :template '(:with-author nil))))
+    (unwind-protect
+        (progn
+          (write-region
+           "#+TITLE: Disk title\n\nDisk body\n"
+           nil source nil 'silent)
+          (make-directory staging)
+          (setq visiting (find-file-noselect source))
+          (with-current-buffer visiting
+            (goto-char (point-max))
+            (insert "\nUnsaved marker\n"))
+          (let ((output
+                 (org-roam-blog--export-content-entry entry staging)))
+            (should hook-ran)
+            (with-temp-buffer
+              (insert-file-contents output)
+              (should (search-forward "Disk body" nil t))
+              (should-not (search-forward "Unsaved marker" nil t)))))
+      (when (buffer-live-p visiting)
+        (with-current-buffer visiting
+          (set-buffer-modified-p nil))
+        (kill-buffer visiting))
+      (delete-directory root t))))
+
+(ert-deftest org-roam-blog-test-content-batch-promotes-and-cleans-staging ()
+  (let* ((root (make-temp-file "org-roam-blog-batch-" t))
+         (source (expand-file-name "post.org" root))
+         (publish (expand-file-name "public" root))
+         (temporary (expand-file-name "temporary" root))
+         (target (expand-file-name "_org/post.html" publish))
+         (org-roam-blog-temporary-directory temporary)
+         (entry
+          (list :source source
+                :store-relative "_org/post.html"
+                :store-output target
+                :template '(:with-author nil))))
+    (unwind-protect
+        (progn
+          (make-directory temporary)
+          (write-region "#+TITLE: Post\n\nBody\n"
+                        nil source nil 'silent)
+          (let ((result
+                 (org-roam-blog--publish-content-batch
+                  (list entry))))
+            (should (eq (plist-get result :status) 'success))
+            (should-not (plist-get result :staging))
+            (should (equal (plist-get result :promoted)
+                           (list target)))
+            (should (file-regular-p target))
+            (should-not
+             (directory-files temporary nil
+                              "\\`org-roam-blog-" t))))
+      (delete-directory root t))))
+
+(ert-deftest org-roam-blog-test-content-batch-retains-failed-staging ()
+  (let* ((root (make-temp-file "org-roam-blog-batch-" t))
+         (temporary (expand-file-name "temporary" root))
+         (target (expand-file-name "public/_org/post.html" root))
+         (org-roam-blog-temporary-directory temporary)
+         (entry
+          (list :source (expand-file-name "missing.org" root)
+                :store-relative "_org/post.html"
+                :store-output target
+                :template nil)))
+    (unwind-protect
+        (progn
+          (make-directory temporary)
+          (let* ((result
+                  (org-roam-blog--publish-content-batch
+                   (list entry)))
+                 (staging (plist-get result :staging)))
+            (should (eq (plist-get result :status) 'failure))
+            (should (file-directory-p staging))
+            (should-not (file-exists-p target))
+            (should (plist-get result :diagnostics))))
+      (delete-directory root t))))
+
+(ert-deftest org-roam-blog-test-promote-file-rejects-symlink-target ()
+  (let* ((root (make-temp-file "org-roam-blog-promote-" t))
+         (staged (expand-file-name "staged.html" root))
+         (actual (expand-file-name "actual.html" root))
+         (target (expand-file-name "target.html" root)))
+    (unwind-protect
+        (progn
+          (write-region "new" nil staged nil 'silent)
+          (write-region "old" nil actual nil 'silent)
+          (make-symbolic-link actual target)
+          (should-error
+           (org-roam-blog--promote-file staged target))
+          (with-temp-buffer
+            (insert-file-contents actual)
+            (should (equal (buffer-string) "old"))))
+      (delete-directory root t))))
+
 ;;; org-roam-blog-test.el ends here
