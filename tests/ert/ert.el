@@ -421,4 +421,76 @@
                     (expand-file-name "index.html" publish))))))
       (delete-directory root t))))
 
+(ert-deftest org-roam-blog-test-static-files-filter-and-preserve-layout ()
+  (let* ((root (make-temp-file "org-roam-blog-static-" t))
+         (source (expand-file-name "assets" root))
+         (publish (expand-file-name "public" root))
+         (org-roam-blog-publish-directory publish)
+         (org-roam-blog-static
+          (list (list :source source :directory "static"
+                      :extensions "css\\|svg"))))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "icons" source) t)
+          (write-region "body {}" nil
+                        (expand-file-name "site.css" source)
+                        nil 'silent)
+          (write-region "<svg/>" nil
+                        (expand-file-name "icons/logo.svg" source)
+                        nil 'silent)
+          (write-region "ignored" nil
+                        (expand-file-name "notes.txt" source)
+                        nil 'silent)
+          (let ((records (org-roam-blog--static-files)))
+            (should
+             (equal
+              (mapcar (lambda (record)
+                        (plist-get record :target-relative))
+                      records)
+              '("static/icons/logo.svg" "static/site.css")))))
+      (delete-directory root t))))
+
+(ert-deftest org-roam-blog-test-static-output-plan-detects-conflict ()
+  (let* ((target "/tmp/public/site.css")
+         (records
+          (list (list :source "/tmp/assets/site.css"
+                      :target target :owner "static[0]")))
+         (generated
+          (list (org-roam-blog--plan-item
+                 'sitemap 'manifest target 'sitemap))))
+    (should
+     (org-roam-blog--output-conflicts
+      (append generated
+              (org-roam-blog--static-output-plan records))))))
+
+(ert-deftest org-roam-blog-test-publish-static-copies-without-global-project ()
+  (let* ((root (make-temp-file "org-roam-blog-static-publish-" t))
+         (source-directory (expand-file-name "assets" root))
+         (source (expand-file-name "nested/site.css" source-directory))
+         (target (expand-file-name "public/static/nested/site.css" root))
+         (mapping
+          (list :source source-directory :directory "static"))
+         (record
+          (list :source source
+                :source-relative "nested/site.css"
+                :target target
+                :target-relative "static/nested/site.css"
+                :mapping mapping
+                :owner "org-roam-blog-static[0]"))
+         (org-publish-project-alist '(("existing" :base-directory "/tmp"))))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory source) t)
+          (write-region "body {}" nil source nil 'silent)
+          (should (equal (org-roam-blog--publish-static (list record))
+                         (list target)))
+          (should (file-regular-p target))
+          (with-temp-buffer
+            (insert-file-contents target)
+            (should (equal (buffer-string) "body {}")))
+          (should
+           (equal org-publish-project-alist
+                  '(("existing" :base-directory "/tmp")))))
+      (delete-directory root t))))
+
 ;;; org-roam-blog-test.el ends here

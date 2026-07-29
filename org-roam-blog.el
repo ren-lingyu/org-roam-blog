@@ -188,6 +188,10 @@ required."
 (defconst org-roam-blog--static-keys
   '(:source :directory :extensions))
 
+(defconst org-roam-blog--default-static-extensions
+  "css\\|js\\|png\\|svg\\|jpg\\|jpeg\\|gif\\|webp\\|ico\\|pdf\\|woff\\|woff2"
+  "Default regexp matching static file extensions.")
+
 (defconst org-roam-blog--sitemap-keys
   '(:enable :path :title :sort :include-tags :exclude-tags
     :content-function :template))
@@ -453,8 +457,7 @@ is the absolute output file and OWNER identifies its configuration."
   "Return an output plan for generated manifest ENTRIES.
 
 The plan includes content store files, redirects, and enabled sitemap
-and theindex targets.  Static targets are added later when static
-source enumeration is implemented."
+and theindex targets."
   (let (items)
     (dolist (entry entries)
       (push
@@ -487,6 +490,96 @@ source enumeration is implemented."
         'org-roam-blog-theindex)
        items))
     (nreverse items)))
+
+(defun org-roam-blog--static-extension-regexp (mapping)
+  "Return the complete file regexp for static MAPPING."
+  (format
+   "\\.\\(?:%s\\)\\'"
+   (or (plist-get mapping :extensions)
+       org-roam-blog--default-static-extensions)))
+
+(defun org-roam-blog--static-target-relative (mapping source-relative)
+  "Return publication-relative target for MAPPING and SOURCE-RELATIVE."
+  (let ((directory (plist-get mapping :directory)))
+    (if (equal directory ".")
+        source-relative
+      (concat (file-name-as-directory directory) source-relative))))
+
+(defun org-roam-blog--static-files ()
+  "Return static file records selected by `org-roam-blog-static'.
+
+Each record contains `:source', `:source-relative', `:target',
+`:target-relative', `:mapping', and `:owner'.  Directory traversal is
+recursive and does not follow symlinked directories.  A selected file
+whose true path escapes its configured source directory signals an
+error."
+  (let (records)
+    (cl-loop
+     for mapping in org-roam-blog-static
+     for index from 0
+     for owner = (format "org-roam-blog-static[%d]" index)
+     for base = (file-name-as-directory
+                 (expand-file-name (plist-get mapping :source)))
+     for regexp = (org-roam-blog--static-extension-regexp mapping)
+     do
+     (unless (file-directory-p base)
+       (error "Static source directory does not exist: %s" base))
+     (dolist (source
+              (directory-files-recursively base regexp nil nil nil))
+       (unless (and (file-regular-p source)
+                    (org-roam-blog--path-inside-p
+                     (file-truename source) (file-truename base)))
+         (error "Static source escapes its configured directory: %s"
+                source))
+       (let* ((source-relative (file-relative-name source base))
+              (target-relative
+               (org-roam-blog--static-target-relative
+                mapping source-relative)))
+         (push
+          (list :source source
+                :source-relative source-relative
+                :target (org-roam-blog--output-path target-relative)
+                :target-relative target-relative
+                :mapping mapping
+                :owner owner)
+          records)))
+     finally return (nreverse records))))
+
+(defun org-roam-blog--static-output-plan (records)
+  "Return output plan items for static file RECORDS."
+  (mapcar
+   (lambda (record)
+     (org-roam-blog--plan-item
+      'static (plist-get record :source)
+      (plist-get record :target)
+      (plist-get record :owner)))
+   records))
+
+(defun org-roam-blog--publish-static (records)
+  "Publish static file RECORDS directly to their final targets.
+
+Use `org-publish-attachment' for copying while preserving the source
+tree below each mapping.  Return the final target paths in publication
+order.  This function does not modify `org-publish-project-alist'."
+  (let (published)
+    (dolist (record records)
+      (let* ((source (plist-get record :source))
+             (target (plist-get record :target))
+             (mapping (plist-get record :mapping))
+             (project
+              (list :base-directory
+                    (file-name-as-directory
+                     (expand-file-name (plist-get mapping :source)))
+                    :publishing-directory
+                    (file-name-directory target))))
+        (unless (org-roam-blog--promotable-target-p target)
+          (error "Refusing to replace non-regular static target: %s"
+                 target))
+        (make-directory (file-name-directory target) t)
+        (org-publish-attachment
+         project source (file-name-directory target))
+        (push target published)))
+    (nreverse published)))
 
 (defun org-roam-blog--output-conflicts (items)
   "Return diagnostics for exact target collisions in plan ITEMS."
@@ -931,7 +1024,15 @@ to DIAGNOSTICS and return the resulting list."
            (push (org-roam-blog--diagnostic
                   'error subject
                   "The :extensions field must be nil or a regexp string.")
-                 diagnostics))))
+                 diagnostics))
+         (when (stringp extensions)
+           (condition-case nil
+               (string-match-p extensions "")
+             (invalid-regexp
+              (push (org-roam-blog--diagnostic
+                     'error subject
+                     "The :extensions field is not a valid regexp.")
+                    diagnostics))))))
      finally return diagnostics)))
 
 (defun org-roam-blog--validate-sitemap (diagnostics)
