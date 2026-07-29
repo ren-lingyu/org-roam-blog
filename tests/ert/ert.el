@@ -589,4 +589,35 @@
               '("/public/a.css")))
       (should-not (plist-get result :promoted)))))
 
+(ert-deftest org-roam-blog-test-store-mirror-preserves-org-links ()
+  (let* ((root (make-temp-file "org-roam-blog-links-" t))
+         (source-root (expand-file-name "source" root))
+         (source (expand-file-name "pages/index.org" source-root))
+         (target (expand-file-name "posts/post.org" source-root))
+         (staging (expand-file-name "staging" root))
+         (output (expand-file-name "_org/pages/index.html" staging))
+         (entry
+          (list :source source
+                :store-relative "_org/pages/index.html"
+                :template '(:with-author nil))))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory source) t)
+          (make-directory (file-name-directory target) t)
+          (write-region
+           (concat
+            "#+TITLE: Index\n\n"
+            "[[file:../posts/post.org][File link]]\n")
+           nil source nil 'silent)
+          (org-roam-blog--export-content-entry entry staging)
+          (should (file-regular-p output))
+          (with-temp-buffer
+            (insert-file-contents output)
+            (ert-info ((buffer-string))
+              (should
+               (re-search-forward
+                "href=\"\\.\\./posts/post\\.html\">File link"
+                nil t)))))
+      (delete-directory root t))))
+
 ;;; org-roam-blog-test.el ends here
