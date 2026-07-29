@@ -493,4 +493,100 @@
                   '(("existing" :base-directory "/tmp")))))
       (delete-directory root t))))
 
+(ert-deftest org-roam-blog-test-prepare-publication-stops-before-query ()
+  (let ((org-roam-blog-directory "relative")
+        queried)
+    (cl-letf (((symbol-function 'org-roam-blog--build-manifest)
+               (lambda ()
+                 (setq queried t)
+                 '(:entries nil :diagnostics nil))))
+      (let ((result (org-roam-blog--prepare-publication)))
+        (should (eq (plist-get result :status) 'failure))
+        (should-not queried)))))
+
+(ert-deftest org-roam-blog-test-prepare-publication-detects-static-conflict ()
+  (let ((org-roam-blog-sitemap
+         '(:enable t :path "index.html"))
+        (org-roam-blog-theindex '(:enable nil)))
+    (cl-letf (((symbol-function 'org-roam-blog--collect-diagnostics)
+               (lambda () nil))
+              ((symbol-function 'org-roam-blog--build-manifest)
+               (lambda () '(:entries nil :diagnostics nil)))
+              ((symbol-function 'org-roam-blog--static-files)
+               (lambda ()
+                 '((:source "/assets/index.html"
+                    :target "/public/index.html"
+                    :owner "static[0]"))))
+              ((symbol-function 'org-roam-blog--generated-output-plan)
+               (lambda (_entries)
+                 (list
+                  (org-roam-blog--plan-item
+                   'sitemap 'manifest "/public/index.html"
+                   'sitemap))))
+              ((symbol-function 'org-roam-blog--output-target-diagnostics)
+               (lambda (_plan) nil)))
+      (let ((result (org-roam-blog--prepare-publication)))
+        (should (eq (plist-get result :status) 'failure))
+        (should
+         (string-match-p
+          "Output conflict"
+          (plist-get
+           (car (plist-get result :diagnostics))
+           :message)))))))
+
+(ert-deftest org-roam-blog-test-publish-orders-stage-static-promote ()
+  (let (events)
+    (cl-letf (((symbol-function 'org-roam-blog--prepare-publication)
+               (lambda ()
+                 '(:status success :entries (entry)
+                   :static (asset) :plan (plan)
+                   :diagnostics nil)))
+              ((symbol-function 'org-roam-blog--stage-generated-batch)
+               (lambda (_entries)
+                 (push 'stage events)
+                 '(:status success :staging "/tmp/staging")))
+              ((symbol-function 'org-roam-blog--publish-static-batch)
+               (lambda (_records)
+                 (push 'static events)
+                 '(:status success :published ("/public/site.css"))))
+              ((symbol-function 'org-roam-blog--promote-generated-batch)
+               (lambda (_staged)
+                 (push 'promote events)
+                 '(:status success :staging nil
+                   :promoted ("/public/index.html")))))
+      (let ((result (org-roam-blog--publish)))
+        (should (eq (plist-get result :status) 'success))
+        (should (equal (nreverse events) '(stage static promote)))
+        (should
+         (equal (plist-get result :static-published)
+                '("/public/site.css")))
+        (should
+         (equal (plist-get result :promoted)
+                '("/public/index.html")))))))
+
+(ert-deftest org-roam-blog-test-publish-retains-staging-on-static-failure ()
+  (cl-letf (((symbol-function 'org-roam-blog--prepare-publication)
+             (lambda ()
+               '(:status success :entries nil :static (asset)
+                 :plan nil :diagnostics nil)))
+            ((symbol-function 'org-roam-blog--stage-generated-batch)
+             (lambda (_entries)
+               '(:status success :staging "/tmp/staging")))
+            ((symbol-function 'org-roam-blog--publish-static-batch)
+             (lambda (_records)
+               '(:status failure :published ("/public/a.css")
+                 :diagnostics
+                 ((:severity error :subject static
+                   :message "copy failed")))))
+            ((symbol-function 'org-roam-blog--promote-generated-batch)
+             (lambda (_staged)
+               (ert-fail "Promotion must not run"))))
+    (let ((result (org-roam-blog--publish)))
+      (should (eq (plist-get result :status) 'failure))
+      (should (equal (plist-get result :staging) "/tmp/staging"))
+      (should
+       (equal (plist-get result :static-published)
+              '("/public/a.css")))
+      (should-not (plist-get result :promoted)))))
+
 ;;; org-roam-blog-test.el ends here

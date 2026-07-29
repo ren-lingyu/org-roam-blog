@@ -563,23 +563,50 @@ tree below each mapping.  Return the final target paths in publication
 order.  This function does not modify `org-publish-project-alist'."
   (let (published)
     (dolist (record records)
-      (let* ((source (plist-get record :source))
-             (target (plist-get record :target))
-             (mapping (plist-get record :mapping))
-             (project
-              (list :base-directory
-                    (file-name-as-directory
-                     (expand-file-name (plist-get mapping :source)))
-                    :publishing-directory
-                    (file-name-directory target))))
-        (unless (org-roam-blog--promotable-target-p target)
-          (error "Refusing to replace non-regular static target: %s"
-                 target))
-        (make-directory (file-name-directory target) t)
-        (org-publish-attachment
-         project source (file-name-directory target))
-        (push target published)))
+      (push (org-roam-blog--publish-static-record record) published))
     (nreverse published)))
+
+(defun org-roam-blog--publish-static-record (record)
+  "Publish one static RECORD and return its final target."
+  (let* ((source (plist-get record :source))
+         (target (plist-get record :target))
+         (mapping (plist-get record :mapping))
+         (project
+          (list :base-directory
+                (file-name-as-directory
+                 (expand-file-name (plist-get mapping :source)))
+                :publishing-directory
+                (file-name-directory target))))
+    (unless (org-roam-blog--promotable-target-p target)
+      (error "Refusing to replace non-regular static target: %s"
+             target))
+    (make-directory (file-name-directory target) t)
+    (org-publish-attachment
+     project source (file-name-directory target))
+    target))
+
+(defun org-roam-blog--publish-static-batch (records)
+  "Publish static RECORDS and return a result plist.
+
+The result contains `:status', `:published', and `:diagnostics'.  On
+failure, `:published' lists the targets copied before the error."
+  (let (published diagnostics)
+    (condition-case error-data
+        (progn
+          (dolist (record records)
+            (push (org-roam-blog--publish-static-record record)
+                  published))
+          (list :status 'success
+                :published (nreverse published)
+                :diagnostics nil))
+      (error
+       (push
+        (org-roam-blog--diagnostic
+         'error 'static (error-message-string error-data))
+        diagnostics)
+       (list :status 'failure
+             :published (nreverse published)
+             :diagnostics (nreverse diagnostics))))))
 
 (defun org-roam-blog--output-conflicts (items)
   "Return diagnostics for exact target collisions in plan ITEMS."
@@ -599,6 +626,25 @@ order.  This function does not modify `org-publish-project-alist'."
                       (plist-get item :owner)))
              diagnostics)
           (puthash target item targets))))
+    (nreverse diagnostics)))
+
+(defun org-roam-blog--output-target-diagnostics (items)
+  "Return diagnostics for unsafe or non-promotable plan ITEMS."
+  (let (diagnostics)
+    (dolist (item items)
+      (let ((target (plist-get item :target)))
+        (unless (file-in-directory-p
+                 target org-roam-blog-publish-directory)
+          (push
+           (org-roam-blog--diagnostic
+            'error target "Output target escapes the publication directory.")
+           diagnostics))
+        (unless (org-roam-blog--promotable-target-p target)
+          (push
+           (org-roam-blog--diagnostic
+            'error target
+            "Existing output target is a directory, symlink, or special file.")
+           diagnostics))))
     (nreverse diagnostics)))
 
 (defun org-roam-blog--make-staging-directory ()
@@ -856,23 +902,16 @@ symlink, or special file.  Return TARGET."
   (copy-file staged target t t nil t)
   target)
 
-(defun org-roam-blog--publish-generated-batch (entries)
-  "Stage and promote all generated output for manifest ENTRIES.
+(defun org-roam-blog--stage-generated-batch (entries)
+  "Stage all generated output for manifest ENTRIES.
 
-Return a result plist with `:status', `:staging', `:promoted', and
-`:diagnostics'.  Status is `success' only when all content, sitemap,
-and redirects were generated, promoted in that order, and the staging
-directory was removed.
-
-Generation failure occurs before promotion and leaves the staging
-directory for inspection.  Promotion failure may leave a partial
-update; the result lists targets already promoted and also preserves
-the staging directory."
+Return a result plist containing `:status', `:staging', staged
+`:content', `:sitemap', `:redirects', and `:diagnostics'.  Failure
+leaves the staging directory for inspection."
   (when (plist-get org-roam-blog-theindex :enable)
     (error "Theindex generation is not implemented"))
   (let ((staging (org-roam-blog--make-staging-directory))
-        staged-content staged-sitemap staged-redirects
-        promoted diagnostics)
+        staged-content staged-sitemap staged-redirects diagnostics)
     (condition-case error-data
         (progn
           (setq staged-content
@@ -881,18 +920,43 @@ the staging directory."
                 (org-roam-blog--stage-sitemap entries staging)
                 staged-redirects
                 (org-roam-blog--stage-redirects entries staging))
-          (dolist (pair staged-content)
+          (list :status 'success
+                :staging staging
+                :content staged-content
+                :sitemap staged-sitemap
+                :redirects staged-redirects
+                :diagnostics nil))
+      (error
+       (push
+        (org-roam-blog--diagnostic
+         'error 'content
+         (error-message-string error-data))
+        diagnostics)
+       (list :status 'failure
+             :staging staging
+             :diagnostics (nreverse diagnostics))))))
+
+(defun org-roam-blog--promote-generated-batch (staged)
+  "Promote a successful STAGED generated-output result.
+
+Return a result plist with `:status', `:staging', `:promoted', and
+`:diagnostics'.  Content is promoted first, followed by sitemap and
+redirects.  Failure preserves the staging directory and reports
+targets already promoted."
+  (let ((staging (plist-get staged :staging))
+        promoted diagnostics)
+    (condition-case error-data
+        (progn
+          (dolist (pair (plist-get staged :content))
             (let ((target (plist-get (car pair) :store-output)))
               (org-roam-blog--promote-file (cdr pair) target)
               (push target promoted)))
-          (when staged-sitemap
+          (when-let* ((sitemap (plist-get staged :sitemap)))
             (let ((target
-                   (org-roam-blog--output-path
-                    (car staged-sitemap))))
-              (org-roam-blog--promote-file
-               (cdr staged-sitemap) target)
+                   (org-roam-blog--output-path (car sitemap))))
+              (org-roam-blog--promote-file (cdr sitemap) target)
               (push target promoted)))
-          (dolist (pair staged-redirects)
+          (dolist (pair (plist-get staged :redirects))
             (let ((target
                    (org-roam-blog--output-path
                     (plist-get (car pair) :redirect-relative))))
@@ -906,13 +970,23 @@ the staging directory."
       (error
        (push
         (org-roam-blog--diagnostic
-         'error 'content
-         (error-message-string error-data))
+         'error 'promotion (error-message-string error-data))
         diagnostics)
        (list :status 'failure
              :staging staging
              :promoted (nreverse promoted)
              :diagnostics (nreverse diagnostics))))))
+
+(defun org-roam-blog--publish-generated-batch (entries)
+  "Stage and promote all generated output for manifest ENTRIES.
+
+This compatibility entry point performs both phases without publishing
+static files.  Generation failure leaves staging intact; promotion
+failure also reports targets already promoted."
+  (let ((staged (org-roam-blog--stage-generated-batch entries)))
+    (if (eq (plist-get staged :status) 'success)
+        (org-roam-blog--promote-generated-batch staged)
+      staged)))
 
 (defun org-roam-blog--publish-content-batch (entries)
   "Stage and promote generated output for manifest ENTRIES.
@@ -1208,6 +1282,116 @@ synchronize the Org-roam database."
               diagnostics)))
     (nreverse diagnostics)))
 
+(defun org-roam-blog--diagnostics-have-errors-p (diagnostics)
+  "Return non-nil when DIAGNOSTICS contains an error."
+  (cl-some
+   (lambda (diagnostic)
+     (eq (plist-get diagnostic :severity) 'error))
+   diagnostics))
+
+(defun org-roam-blog--prepare-publication ()
+  "Build and validate a publication plan without writing output.
+
+Return a plist containing `:status', `:entries', `:static', `:plan',
+and `:diagnostics'.  Configuration or capability errors prevent
+database queries.  Manifest, static enumeration, target, and conflict
+errors prevent publication."
+  (let ((diagnostics (org-roam-blog--collect-diagnostics))
+        entries static plan)
+    (when (and (not (org-roam-blog--diagnostics-have-errors-p
+                     diagnostics))
+               (plist-get org-roam-blog-theindex :enable))
+      (push
+       (org-roam-blog--diagnostic
+        'error 'org-roam-blog-theindex
+        "Theindex publication is not implemented.")
+       diagnostics))
+    (unless (org-roam-blog--diagnostics-have-errors-p diagnostics)
+      (let ((manifest (org-roam-blog--build-manifest)))
+        (setq entries (plist-get manifest :entries)
+              diagnostics
+              (append diagnostics
+                      (plist-get manifest :diagnostics)))))
+    (unless (org-roam-blog--diagnostics-have-errors-p diagnostics)
+      (condition-case error-data
+          (setq static (org-roam-blog--static-files)
+                plan
+                (append
+                 (org-roam-blog--generated-output-plan entries)
+                 (org-roam-blog--static-output-plan static))
+                diagnostics
+                (append
+                 diagnostics
+                 (org-roam-blog--output-conflicts plan)
+                 (org-roam-blog--output-target-diagnostics plan)))
+        (error
+         (setq diagnostics
+               (append
+                diagnostics
+                (list
+                 (org-roam-blog--diagnostic
+                  'error 'publication-plan
+                  (error-message-string error-data))))))))
+    (list :status
+          (if (org-roam-blog--diagnostics-have-errors-p diagnostics)
+              'failure
+            'success)
+          :entries entries
+          :static static
+          :plan plan
+          :diagnostics diagnostics)))
+
+(defun org-roam-blog--publish ()
+  "Run one complete Org-roam Blog publication and return its result.
+
+The result records `:status', `:staging', `:static-published',
+`:promoted', `:plan', and `:diagnostics'.  Preflight failure performs
+no publication writes.  Generated output is fully staged before
+static files are copied, then generated content is promoted in
+content, sitemap, and redirect order."
+  (let* ((prepared (org-roam-blog--prepare-publication))
+         (diagnostics (plist-get prepared :diagnostics))
+         (plan (plist-get prepared :plan)))
+    (if (eq (plist-get prepared :status) 'failure)
+        (list :status 'failure :staging nil
+              :static-published nil :promoted nil
+              :plan plan :diagnostics diagnostics)
+      (let ((staged
+             (org-roam-blog--stage-generated-batch
+              (plist-get prepared :entries))))
+        (if (eq (plist-get staged :status) 'failure)
+            (list :status 'failure
+                  :staging (plist-get staged :staging)
+                  :static-published nil :promoted nil
+                  :plan plan
+                  :diagnostics
+                  (append diagnostics
+                          (plist-get staged :diagnostics)))
+          (let ((static-result
+                 (org-roam-blog--publish-static-batch
+                  (plist-get prepared :static))))
+            (if (eq (plist-get static-result :status) 'failure)
+                (list :status 'failure
+                      :staging (plist-get staged :staging)
+                      :static-published
+                      (plist-get static-result :published)
+                      :promoted nil :plan plan
+                      :diagnostics
+                      (append diagnostics
+                              (plist-get static-result :diagnostics)))
+              (let ((promoted
+                     (org-roam-blog--promote-generated-batch staged)))
+                (list
+                 :status (plist-get promoted :status)
+                 :staging (plist-get promoted :staging)
+                 :static-published
+                 (plist-get static-result :published)
+                 :promoted (plist-get promoted :promoted)
+                 :plan plan
+                 :diagnostics
+                 (append diagnostics
+                         (plist-get promoted :diagnostics)))))))))))
+
 (define-derived-mode org-roam-blog-diagnostics-mode special-mode
   "Org-roam-Blog-Diagnostics"
   "Major mode for an Org-roam Blog diagnostics report.")
@@ -1246,6 +1430,27 @@ it reports a short message and returns non-nil."
           nil)
       (message "Org-roam Blog configuration and capabilities are valid")
       t)))
+
+;;;###autoload
+(defun org-roam-blog-publish ()
+  "Publish the configured Org-roam blog and return a result plist.
+
+Validate configuration and capabilities, query Org-roam, construct
+the complete output plan, and reject conflicts before writing.  Stage
+all generated Org output, publish static attachments directly, and
+then promote generated content.  The command never synchronizes the
+Org-roam database or permanently modifies Org Publish configuration.
+
+On failure, display the unified diagnostics report.  A retained
+staging directory and any partially published targets are included in
+the returned result."
+  (interactive)
+  (let ((result (org-roam-blog--publish)))
+    (if (eq (plist-get result :status) 'success)
+        (message "Org-roam Blog publication completed")
+      (org-roam-blog--render-diagnostics
+       (plist-get result :diagnostics)))
+    result))
 
 (provide 'org-roam-blog)
 
