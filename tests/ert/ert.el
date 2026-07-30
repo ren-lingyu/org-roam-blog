@@ -60,7 +60,7 @@
         (org-roam-blog-publish-store "_org")
         (org-roam-blog-site-url nil)
         (org-roam-blog-temporary-directory nil)
-        (org-roam-blog-default-template nil)
+        (org-roam-blog-export-default nil)
         (org-roam-blog-content nil)
         (org-roam-blog-static nil)
         (org-roam-blog-sitemap (list :enable nil))
@@ -73,7 +73,7 @@
         (org-roam-blog-publish-store "_org")
         (org-roam-blog-site-url nil)
         (org-roam-blog-temporary-directory nil)
-        (org-roam-blog-default-template nil)
+        (org-roam-blog-export-default nil)
         (org-roam-blog-content (list (list :name "post"
                                            :tags '("blog" "post")
                                            :unknown t)))
@@ -92,7 +92,7 @@
         (org-roam-blog-publish-store "_org")
         (org-roam-blog-site-url nil)
         (org-roam-blog-temporary-directory nil)
-        (org-roam-blog-default-template nil)
+        (org-roam-blog-export-default nil)
         (org-roam-blog-published-property "")
         (org-roam-blog-content nil)
         (org-roam-blog-static nil)
@@ -110,8 +110,8 @@
         (org-roam-blog-publish-store "_org")
         (org-roam-blog-site-url nil)
         (org-roam-blog-temporary-directory nil)
-        (org-roam-blog-default-template nil)
-        (org-roam-blog-default-bindings '(("org-html-head" . "invalid")))
+        (org-roam-blog-export-default
+         (list :bindings '(("org-html-head" . "invalid"))))
         (org-roam-blog-content nil)
         (org-roam-blog-static nil)
         (org-roam-blog-sitemap (list :enable nil))
@@ -119,7 +119,7 @@
     (should (cl-find-if (lambda (diagnostic)
                           (eq (plist-get diagnostic
                                          :subject)
-                              'org-roam-blog-default-bindings))
+                              'org-roam-blog-export-default))
                         (org-roam-blog--validate-variables)))))
 
 (ert-deftest org-roam-blog-test-object-validation-rejects-invalid-bindings ()
@@ -241,9 +241,10 @@
          (org-roam-blog-directory source-root)
          (org-roam-blog-publish-directory "/tmp/public/")
          (org-roam-blog-publish-store "_org")
-         (org-roam-blog-default-template (list :with-toc nil))
-         (org-roam-blog-default-bindings (list (cons 'org-html-head "default")
-                                               (cons 'org-html-postamble t)))
+         (org-roam-blog-export-default
+          (list :template (list :with-toc nil)
+                :bindings (list (cons 'org-html-head "default")
+                                (cons 'org-html-postamble t))))
          (org-roam-blog-content (list (list :name "post"
                                             :tags '("blog" "post")
                                             :directory "posts"
@@ -299,7 +300,7 @@
          (org-roam-blog-directory source-root)
          (org-roam-blog-publish-directory "/tmp/public/")
          (org-roam-blog-publish-store "_org")
-         (org-roam-blog-default-template nil)
+         (org-roam-blog-export-default nil)
          (org-roam-blog-published-property "PUBLISHED")
          (org-roam-blog-content (list (list :name "post"
                                             :tags '("blog" "post")
@@ -341,7 +342,7 @@
          (org-roam-blog-directory source-root)
          (org-roam-blog-publish-directory "/tmp/public/")
          (org-roam-blog-publish-store "_org")
-         (org-roam-blog-default-template nil)
+         (org-roam-blog-export-default nil)
          (org-roam-blog-content (list (list :name "post"
                                             :tags '("blog" "post"))
                                       (list :name "index"
@@ -585,12 +586,12 @@
                             html))))
 
 (ert-deftest org-roam-blog-test-sitemap-projects-tags ()
-  (should (equal (org-roam-blog--project-sitemap-tags '("blog" "post" "emacs" "linux")
+  (should (equal (org-roam-blog--sitemap-project-tags '("blog" "post" "emacs" "linux")
                                                       (list :visible-tags '("post" "emacs")))
                  '("post" "emacs")))
-  (should-not (org-roam-blog--project-sitemap-tags '("blog" "post")
+  (should-not (org-roam-blog--sitemap-project-tags '("blog" "post")
                                                    (list :visible-tags nil)))
-  (should-not (org-roam-blog--project-sitemap-tags '("blog" "post")
+  (should-not (org-roam-blog--sitemap-project-tags '("blog" "post")
                                                    nil)))
 
 (ert-deftest org-roam-blog-test-sitemap-sorts-published-entries-first ()
@@ -608,7 +609,7 @@
                       :published-time "2026-01-01"
                       :tags nil
                       :sitemap t))
-         (prepared (org-roam-blog--prepare-sitemap-entries (list undated
+         (prepared (org-roam-blog--sitemap-prepare-entries (list undated
                                                                   older
                                                                   newer)
                                                             config)))
@@ -618,7 +619,7 @@
                            prepared)
                    '("Newer" "Older" "Undated")))))
 
-(ert-deftest org-roam-blog-test-default-sitemap-uses-relative-urls ()
+(ert-deftest org-roam-blog-test-sitemap-default-generator-uses-relative-urls ()
   (let* ((config (list :path "pages/sitemap.html"
                        :title "Posts"
                        :visible-tags '("emacs")))
@@ -629,10 +630,10 @@
                               :modified-time "MODIFIED-MUST-NOT-BE-DISPLAYED"
                               :tags '("blog" "emacs")
                               :sitemap t)))
-         (prepared (org-roam-blog--prepare-sitemap-entries entries
+         (prepared (org-roam-blog--sitemap-prepare-entries entries
                                                            config))
-         (content (org-roam-blog--default-sitemap-content prepared
-                                                          config)))
+         (content (org-roam-blog--sitemap-default-generator prepared
+                                                            config)))
     (should (string-match-p "\\[\\[file:\\.\\./_org/id/post\\.html\\]\\[Post\\]\\]"
                             content))
     (should (string-match-p "2026-07-30"
@@ -642,19 +643,19 @@
     (should (string-match-p "(emacs)" content))
     (should-not (string-match-p "blog" content))))
 
-(ert-deftest org-roam-blog-test-sitemap-content-function-receives-prepared ()
+(ert-deftest org-roam-blog-test-sitemap-generator-receives-prepared ()
   (let* ((received nil)
          (org-roam-blog-sitemap (list :enable t
                                       :path "sitemap.html"
                                       :visible-tags '("emacs")
-                                      :content-function
+                                      :generator
                                       (lambda (entries _config)
                                         (setq received entries)
                                         "#+TITLE: Custom\n"))))
-    (should (equal (org-roam-blog--sitemap-content (list (list :title "Post"
-                                                               :store-relative "_org/post.html"
-                                                               :tags '("blog" "emacs")
-                                                               :sitemap t)))
+    (should (equal (org-roam-blog--sitemap-source (list (list :title "Post"
+                                                              :store-relative "_org/post.html"
+                                                              :tags '("blog" "emacs")
+                                                              :sitemap t)))
                    "#+TITLE: Custom\n"))
     (should (equal (plist-get (car received)
                               :tags)
@@ -669,8 +670,9 @@
                                          publish))
          (org-roam-blog-publish-directory publish)
          (org-roam-blog-temporary-directory temporary)
-         (org-roam-blog-default-template (list :with-author nil))
-         (org-roam-blog-default-bindings (list (cons 'org-html-head "default-head")))
+         (org-roam-blog-export-default
+          (list :template (list :with-author nil)
+                :bindings (list (cons 'org-html-head "default-head"))))
          (org-html-head "outside-head")
          (org-roam-blog-sitemap (list :enable t
                                       :path "sitemap.html"
