@@ -34,6 +34,43 @@
                    (list (cons 'org-html-head "base")
                          (cons 'org-html-postamble t))))))
 
+(ert-deftest org-roam-blog-test-export-configuration-appends-body-functions ()
+  (let* ((default-function (lambda (context)
+                             (plist-get context
+                                        :body)))
+         (object-function (lambda (context)
+                            (plist-get context
+                                       :body)))
+         (org-roam-blog-export-default
+          (list :template (list :with-toc nil)
+                :bindings (list (cons 'org-html-head "default"))
+                :body (list default-function)))
+         (configuration (org-roam-blog--export-configuration
+                         (list :template (list :with-toc t)
+                               :bindings (list (cons 'org-html-head nil))
+                               :body (list object-function)))))
+    (should (equal (plist-get configuration
+                              :template)
+                   (list :with-toc t)))
+    (should (equal (plist-get configuration
+                              :bindings)
+                   (list (cons 'org-html-head nil))))
+    (should (equal (plist-get configuration
+                              :body)
+                   (list default-function
+                         object-function)))))
+
+(ert-deftest org-roam-blog-test-export-configuration-nil-body-inherits-default ()
+  (let* ((default-function (lambda (context)
+                             (plist-get context
+                                        :body)))
+         (org-roam-blog-export-default
+          (list :body (list default-function))))
+    (should (equal (plist-get (org-roam-blog--export-configuration
+                              (list :body nil))
+                              :body)
+                   (list default-function)))))
+
 (ert-deftest org-roam-blog-test-relative-path-validation ()
   (should (org-roam-blog--relative-path-p "_org"))
   (should (org-roam-blog--relative-path-p "."
@@ -122,6 +159,27 @@
                               'org-roam-blog-export-default))
                         (org-roam-blog--validate-variables)))))
 
+(ert-deftest org-roam-blog-test-variable-validation-rejects-invalid-default-body ()
+  (let ((org-roam-blog-directory "/tmp/source/")
+        (org-roam-blog-publish-directory "/tmp/public/")
+        (org-roam-blog-publish-store "_org")
+        (org-roam-blog-site-url nil)
+        (org-roam-blog-temporary-directory nil)
+        (org-roam-blog-export-default
+         (list :body (list "not-a-function")))
+        (org-roam-blog-content nil)
+        (org-roam-blog-static nil)
+        (org-roam-blog-sitemap (list :enable nil))
+        (org-roam-blog-theindex (list :enable nil)))
+    (should (cl-find-if (lambda (diagnostic)
+                          (and (eq (plist-get diagnostic
+                                              :subject)
+                                   'org-roam-blog-export-default)
+                               (string-match-p ":body field must be a list of functions"
+                                               (plist-get diagnostic
+                                                          :message))))
+                        (org-roam-blog--validate-variables)))))
+
 (ert-deftest org-roam-blog-test-object-validation-rejects-invalid-bindings ()
   (let* ((org-roam-blog-content (list (list :name "post"
                                             :tags '("blog" "post")
@@ -137,6 +195,33 @@
          (diagnostics (org-roam-blog--validate-sitemap nil)))
     (should (cl-find-if (lambda (diagnostic)
                           (string-match-p ":bindings field must be an alist keyed by symbols"
+                                          (plist-get diagnostic
+                                                     :message)))
+                        diagnostics))))
+
+(ert-deftest org-roam-blog-test-object-validation-rejects-invalid-body ()
+  (let* ((org-roam-blog-content (list (list :name "post"
+                                            :tags '("blog" "post")
+                                            :body (list "not-a-function"))))
+         (diagnostics (org-roam-blog--validate-content nil)))
+    (should (cl-find-if (lambda (diagnostic)
+                          (string-match-p ":body field must be a list of functions"
+                                          (plist-get diagnostic
+                                                     :message)))
+                        diagnostics)))
+  (let* ((org-roam-blog-sitemap (list :enable nil
+                                      :body (list "not-a-function")))
+         (diagnostics (org-roam-blog--validate-sitemap nil)))
+    (should (cl-find-if (lambda (diagnostic)
+                          (string-match-p ":body field must be a list of functions"
+                                          (plist-get diagnostic
+                                                     :message)))
+                        diagnostics)))
+  (let* ((org-roam-blog-theindex (list :enable nil
+                                       :body (list "not-a-function")))
+         (diagnostics (org-roam-blog--validate-theindex nil)))
+    (should (cl-find-if (lambda (diagnostic)
+                          (string-match-p ":body field must be a list of functions"
                                           (plist-get diagnostic
                                                      :message)))
                         diagnostics))))
@@ -472,6 +557,80 @@
         (kill-buffer visiting))
       (delete-directory root t))))
 
+(ert-deftest org-roam-blog-test-content-body-functions-follow-native-filters ()
+  (let* ((root (make-temp-file "org-roam-blog-body-" t))
+         (source (expand-file-name "post.org"
+                                   root))
+         (staging (expand-file-name "staging"
+                                    root))
+         (observed nil)
+         (org-export-filter-body-functions
+          (list (lambda (body _backend _export-info)
+                  (concat body
+                          "\nNATIVE"))))
+         (entry (list :title "Post"
+                      :source source
+                      :source-relative "post.org"
+                      :store-relative "_org/post.html"
+                      :content-name "post"
+                      :published-time "2026-07-30"
+                      :template (list :with-author nil)
+                      :bindings nil
+                      :config (list :name "post")
+                      :body
+                      (list (lambda (context)
+                              (push (list (plist-get context
+                                                    :kind)
+                                          (plist-get context
+                                                     :title)
+                                          (and (string-match-p "NATIVE"
+                                                               (plist-get context
+                                                                          :body))
+                                               t))
+                                    observed)
+                              (concat (plist-get context
+                                                 :body)
+                                      "\nFIRST"))
+                            (lambda (context)
+                              (push (and (string-match-p "FIRST"
+                                                        (plist-get context
+                                                                   :body))
+                                         t)
+                                    observed)
+                              (concat (plist-get context
+                                                 :body)
+                                      "\nSECOND"))))))
+    (unwind-protect
+        (progn (write-region "#+TITLE: Post\n\nBody\n"
+                             nil
+                             source
+                             nil
+                             'silent)
+          (make-directory staging)
+          (let ((output (org-roam-blog--export-content-entry entry
+                                                              staging)))
+            (should (equal (nreverse observed)
+                           (list (list 'content
+                                       "Post"
+                                       t)
+                                 t)))
+            (with-temp-buffer
+              (insert-file-contents output)
+              (should (search-forward "NATIVE" nil t))
+              (should (search-forward "FIRST" nil t))
+              (should (search-forward "SECOND" nil t)))))
+      (delete-directory root
+                        t))))
+
+(ert-deftest org-roam-blog-test-body-function-must-return-string ()
+  (let ((org-roam-blog--body-context (list :kind 'content))
+        (org-roam-blog--body-functions (list (lambda (_context)
+                                               nil))))
+    (should-error (org-roam-blog--body-filter "Body"
+                                              'html
+                                              nil)
+                  :type 'error)))
+
 (ert-deftest org-roam-blog-test-export-bindings-restore-after-error ()
   (let ((org-html-head "outside"))
     (should-error
@@ -632,8 +791,9 @@
                               :sitemap t)))
          (prepared (org-roam-blog--sitemap-prepare-entries entries
                                                            config))
-         (content (org-roam-blog--sitemap-default-generator prepared
-                                                            config)))
+         (content (org-roam-blog--sitemap-default-generator
+                   (list :entries prepared
+                         :config config))))
     (should (string-match-p "\\[\\[file:\\.\\./_org/id/post\\.html\\]\\[Post\\]\\]"
                             content))
     (should (string-match-p "2026-07-30"
@@ -649,17 +809,27 @@
                                       :path "sitemap.html"
                                       :visible-tags '("emacs")
                                       :generator
-                                      (lambda (entries _config)
-                                        (setq received entries)
+                                      (lambda (context)
+                                        (setq received context)
                                         "#+TITLE: Custom\n"))))
     (should (equal (org-roam-blog--sitemap-source (list (list :title "Post"
                                                               :store-relative "_org/post.html"
                                                               :tags '("blog" "emacs")
                                                               :sitemap t)))
                    "#+TITLE: Custom\n"))
-    (should (equal (plist-get (car received)
+    (should (equal (plist-get (car (plist-get received
+                                               :entries))
                               :tags)
                    '("emacs")))))
+
+(ert-deftest org-roam-blog-test-sitemap-generator-must-return-string ()
+  (let ((org-roam-blog-sitemap
+         (list :enable t
+               :path "sitemap.html"
+               :generator (lambda (_context)
+                            nil))))
+    (should-error (org-roam-blog--sitemap-source nil)
+                  :type 'error)))
 
 (ert-deftest org-roam-blog-test-generated-batch-promotes-entry-pages-last ()
   (let* ((root (make-temp-file "org-roam-blog-generated-" t))
@@ -668,6 +838,7 @@
          (temporary (expand-file-name "temporary" root))
          (store-output (expand-file-name "_org/id/index.html"
                                          publish))
+         (sitemap-context nil)
          (org-roam-blog-publish-directory publish)
          (org-roam-blog-temporary-directory temporary)
          (org-roam-blog-export-default
@@ -680,7 +851,13 @@
                                       :sort 'anti-chronologically
                                       :visible-tags nil
                                       :bindings (list (cons 'org-html-head
-                                                            "<meta name=\"sitemap-binding\">"))))
+                                                            "<meta name=\"sitemap-binding\">"))
+                                      :body
+                                      (list (lambda (context)
+                                              (setq sitemap-context context)
+                                              (concat (plist-get context
+                                                                 :body)
+                                                      "\nSITEMAP-BODY")))))
          (org-roam-blog-theindex (list :enable nil))
          (entry (list :title "Index"
                       :source source
@@ -713,7 +890,15 @@
                                                       publish))
               (should (search-forward "<meta name=\"sitemap-binding\">"
                                       nil
+                                      t))
+              (should (search-forward "SITEMAP-BODY"
+                                      nil
                                       t)))
+            (should (eq (plist-get sitemap-context
+                                   :kind)
+                        'sitemap))
+            (should-not (plist-get sitemap-context
+                                   :entry))
             (should (equal org-html-head
                            "outside-head"))
             (should (equal (plist-get result

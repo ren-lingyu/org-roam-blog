@@ -29,8 +29,9 @@
 
 ;; Org-roam Blog publishes blog content selected from the Org-roam database
 ;; while preserving standard Org export behavior.  Export templates and
-;; dynamically scoped variable bindings customize generated documents without
-;; permanently changing Org or export-backend global state.
+;; dynamically scoped variable bindings customize generated documents.  A
+;; context-aware body pipeline supports publication-specific transformations
+;; without permanently changing Org or export-backend global state.
 ;; Link resolution, including the HTML anchors emitted for `id:' links,
 ;; remains the responsibility of Org and the selected export backend.
 ;;
@@ -116,7 +117,7 @@ Static files do not pass through this staging directory."
 
 The supported schema is:
 
-  (:template PLIST :bindings ALIST)
+  (:template PLIST :bindings ALIST :body FUNCTION-LIST)
 
 TEMPLATE is a plist of external options accepted by Org Export and
 the selected backend.  Org-roam Blog does not interpret or whitelist
@@ -127,7 +128,21 @@ BINDINGS is an alist keyed by variable symbols.  Each binding is
 active only while Org-roam Blog prepares and exports one generated
 Org document, and the previous dynamic value is restored afterwards.
 An object's `:bindings' overrides entries with the same symbol,
-including explicitly present nil values."
+including explicitly present nil values.
+
+BODY is a list of functions applied in order after the effective
+native Org body filters.  Each function receives one context plist
+and must return the replacement body string.  Object body functions
+are appended after these defaults.  A missing, nil, or empty object
+value adds no functions and therefore only inherits this list.
+
+The context contains `:kind', `:body', `:backend', `:export-info',
+`:entry', and `:config'.  It also contains the entry convenience
+fields `:title', `:source', `:source-relative', `:content-name',
+`:tags', `:published-time', `:modified-time', `:store-relative', and
+`:redirect-relative'.  `:entry' and its convenience fields are nil
+for generated documents without a current content entry.  Treat the
+context and referenced configuration data as read-only."
   :type 'plist
   :group 'org-roam-blog)
 
@@ -149,14 +164,14 @@ Each element is a plist with this schema:
 
   (:name NAME :tags TAGS :directory DIRECTORY
    :sitemap BOOLEAN :theindex BOOLEAN :template PLIST
-   :bindings ALIST)
+   :bindings ALIST :body FUNCTION-LIST)
 
 NAME is a unique non-empty string.  TAGS is a non-empty list of
 strings, all of which must occur on a level-0 Org-roam node.
 DIRECTORY is nil or a directory relative to
 `org-roam-blog-publish-directory' in which a redirect is generated.
-The two boolean fields select generated indexes.  TEMPLATE and
-BINDINGS extend `org-roam-blog-export-default' according to their
+The two boolean fields select generated indexes.  TEMPLATE, BINDINGS,
+and BODY extend `org-roam-blog-export-default' according to their
 documented merge rules.
 
 A file matching more than one rule is an unsupported configuration
@@ -186,13 +201,16 @@ The supported schema is:
 
   (:enable BOOLEAN :path RELATIVE-FILE :title STRING :sort SYMBOL
    :visible-tags TAGS-OR-NIL
-   :generator FUNCTION-OR-NIL :template PLIST :bindings ALIST)
+   :generator FUNCTION-OR-NIL :template PLIST :bindings ALIST
+   :body FUNCTION-LIST)
 
 Only tags explicitly listed in `:visible-tags' are displayed by the
 sitemap.  A missing or nil value displays no tags.  This whitelist
-never selects content.  When non-nil, `:generator' is called with the
-prepared manifest entries and this configuration plist, and must
-return an Org source string."
+never selects content.  When non-nil, `:generator' receives one plist
+containing `:entries' and `:config', and must return a complete Org
+source string.  The entries have already been selected, sorted, and
+projected through `:visible-tags'.  An empty returned string is valid.
+TEMPLATE, BINDINGS, and BODY extend `org-roam-blog-export-default'."
   :type 'plist
   :group 'org-roam-blog)
 
@@ -203,7 +221,7 @@ return an Org source string."
 The supported schema is:
 
   (:enable BOOLEAN :path RELATIVE-FILE :title STRING
-   :template PLIST :bindings ALIST)
+   :template PLIST :bindings ALIST :body FUNCTION-LIST)
 
 When disabled, capabilities needed only for index collection are not
 required."
@@ -211,10 +229,10 @@ required."
   :group 'org-roam-blog)
 
 (defconst org-roam-blog--content-keys
-  '(:name :tags :directory :sitemap :theindex :template :bindings))
+  '(:name :tags :directory :sitemap :theindex :template :bindings :body))
 
 (defconst org-roam-blog--export-default-keys
-  '(:template :bindings))
+  '(:template :bindings :body))
 
 (defconst org-roam-blog--static-keys
   '(:source :directory :extensions))
@@ -224,10 +242,16 @@ required."
   "Default regexp matching static file extensions.")
 
 (defconst org-roam-blog--sitemap-keys
-  '(:enable :path :title :sort :visible-tags :generator :template :bindings))
+  '(:enable :path :title :sort :visible-tags :generator :template :bindings :body))
 
 (defconst org-roam-blog--theindex-keys
-  '(:enable :path :title :template :bindings))
+  '(:enable :path :title :template :bindings :body))
+
+(defvar org-roam-blog--body-context nil
+  "Base context for the current Org-roam Blog body pipeline.")
+
+(defvar org-roam-blog--body-functions nil
+  "Body functions for the current Org-roam Blog export.")
 
 (defun org-roam-blog--diagnostic (severity subject message)
   "Return a diagnostic with SEVERITY, SUBJECT, and MESSAGE.
@@ -249,6 +273,12 @@ human-readable explanation."
        (cl-every (lambda (binding)
                    (and (consp binding)
                         (symbolp (car binding))))
+                 value)))
+
+(defun org-roam-blog--function-list-p (value)
+  "Return non-nil when VALUE is a proper list of functions."
+  (and (proper-list-p value)
+       (cl-every #'functionp
                  value)))
 
 (defun org-roam-blog--unknown-keys (plist allowed)
@@ -383,6 +413,26 @@ BASE.  Neither argument is modified."
                              (list (copy-tree binding))))))
     result))
 
+(defun org-roam-blog--export-configuration (object)
+  "Return effective export configuration for OBJECT.
+
+OBJECT is a content rule, sitemap configuration, or theindex
+configuration.  Return a plist containing merged `:template',
+`:bindings', and `:body' values.  Default body functions precede
+OBJECT's functions.  Neither configuration is modified."
+  (list :template (org-roam-blog--merge-template (plist-get org-roam-blog-export-default
+                                                            :template)
+                                                 (plist-get object
+                                                            :template))
+        :bindings (org-roam-blog--merge-bindings (plist-get org-roam-blog-export-default
+                                                            :bindings)
+                                                 (plist-get object
+                                                            :bindings))
+        :body (append (copy-sequence (plist-get org-roam-blog-export-default
+                                                :body))
+                      (copy-sequence (plist-get object
+                                                :body)))))
+
 (defun org-roam-blog--call-with-export-bindings (bindings function)
   "Call FUNCTION with dynamic variable BINDINGS.
 
@@ -393,6 +443,64 @@ previous dynamic values when FUNCTION returns or signals an error."
             (mapcar #'cdr
                     bindings)
     (funcall function)))
+
+(defun org-roam-blog--make-body-context (kind entry config)
+  "Return a body-function context for KIND, ENTRY, and CONFIG."
+  (list :kind kind
+        :entry entry
+        :config config
+        :title (plist-get entry
+                          :title)
+        :source (plist-get entry
+                           :source)
+        :source-relative (plist-get entry
+                                    :source-relative)
+        :content-name (plist-get entry
+                                 :content-name)
+        :tags (plist-get entry
+                         :tags)
+        :published-time (plist-get entry
+                                   :published-time)
+        :modified-time (plist-get entry
+                                  :modified-time)
+        :store-relative (plist-get entry
+                                   :store-relative)
+        :redirect-relative (plist-get entry
+                                      :redirect-relative)))
+
+(defun org-roam-blog--body-filter (body backend export-info)
+  "Apply the current Org-roam Blog body pipeline.
+
+BODY, BACKEND, and EXPORT-INFO have the meanings defined by
+`org-export-filter-body-functions'.  Each configured function
+receives a context plist and must return the body passed to the next
+function."
+  (dolist (function org-roam-blog--body-functions
+                    body)
+    (setq body (funcall function
+                        (append (list :body body
+                                      :backend backend
+                                      :export-info export-info)
+                                org-roam-blog--body-context)))
+    (unless (stringp body)
+      (error "Org-roam Blog body function %S returned a non-string value"
+             function))))
+
+(defun org-roam-blog--export-to-file (output template body-functions context)
+  "Export the current Org buffer as HTML to OUTPUT.
+
+TEMPLATE contains external export options.  Append the Org-roam Blog
+BODY-FUNCTIONS adapter after the effective native body filters and
+pass CONTEXT to each body function.  Do not modify global filter
+state."
+  (let ((org-roam-blog--body-context context)
+        (org-roam-blog--body-functions body-functions)
+        (org-export-filter-body-functions
+         (if body-functions
+             (append org-export-filter-body-functions
+                     (list #'org-roam-blog--body-filter))
+           org-export-filter-body-functions)))
+    (org-export-to-file 'html output nil nil nil nil template)))
 
 (defun org-roam-blog--node-matches-tags-p (node tags)
   "Return non-nil when level-0 NODE contains all configured TAGS."
@@ -452,6 +560,7 @@ diagnostic."
                                                                            source-relative)
                                                                    ".html"))
                  (store-output (org-roam-blog--output-path store-relative))
+                 (export-configuration (org-roam-blog--export-configuration rule))
                  (directory (plist-get rule
                                        :directory))
                  (redirect-relative (when directory
@@ -480,14 +589,13 @@ diagnostic."
                         :theindex (and (plist-get rule
                                                   :theindex)
                                        t)
-                        :template (org-roam-blog--merge-template (plist-get org-roam-blog-export-default
-                                                                           :template)
-                                                                 (plist-get rule
-                                                                            :template))
-                        :bindings (org-roam-blog--merge-bindings (plist-get org-roam-blog-export-default
-                                                                           :bindings)
-                                                                 (plist-get rule
-                                                                            :bindings)))
+                        :config rule
+                        :template (plist-get export-configuration
+                                             :template)
+                        :bindings (plist-get export-configuration
+                                             :bindings)
+                        :body (plist-get export-configuration
+                                         :body))
                   nil)))
       (file-error (cons nil
                         (org-roam-blog--diagnostic 'error
@@ -791,9 +899,10 @@ contains a timestamp followed by the unique suffix generated by
 The source file is read into a fresh temporary buffer, so unsaved
 changes in an existing visiting buffer are ignored.  Standard Org
 export hooks and filters remain active under the entry's dynamic
-`:bindings' environment.  Links are passed to Org unchanged; in
-particular, this package does not repair or reinterpret `id:' links
-or their HTML anchors.  Return the staged output file."
+`:bindings' environment.  Effective native body filters run before
+the entry's merged `:body' functions.  Links are passed to Org
+unchanged; in particular, this package does not repair or reinterpret
+`id:' links or their HTML anchors.  Return the staged output file."
   (let* ((source (plist-get entry
                             :source))
          (relative (plist-get entry
@@ -803,7 +912,13 @@ or their HTML anchors.  Return the staged output file."
          (template (plist-get entry
                               :template))
          (bindings (plist-get entry
-                              :bindings)))
+                              :bindings))
+         (body (plist-get entry
+                          :body))
+         (context (org-roam-blog--make-body-context 'content
+                                                    entry
+                                                    (plist-get entry
+                                                               :config))))
     (make-directory (file-name-directory output)
                     t)
     (with-temp-buffer
@@ -814,7 +929,10 @@ or their HTML anchors.  Return the staged output file."
       (org-roam-blog--call-with-export-bindings
        bindings
        (lambda ()
-         (org-export-to-file 'html output nil nil nil nil template))))
+         (org-roam-blog--export-to-file output
+                                        template
+                                        body
+                                        context))))
     output))
 
 (defun org-roam-blog--stage-content (entries staging)
@@ -950,16 +1068,20 @@ redirect file."
                             t
                             t))
 
-(defun org-roam-blog--sitemap-default-generator (entries config)
-  "Return default Org sitemap content for ENTRIES and CONFIG.
+(defun org-roam-blog--sitemap-default-generator (context)
+  "Return default Org sitemap content for CONTEXT.
 
 Display each entry's `:published-time' value when present.  The
 filesystem `:modified-time' remains manifest metadata and is not
 included in the default sitemap."
-  (let ((path (plist-get config
-                         :path))
-        (title (or (plist-get config
-                              :title)
+  (let* ((entries (plist-get context
+                             :entries))
+         (config (plist-get context
+                            :config))
+         (path (plist-get config
+                          :path))
+         (title (or (plist-get config
+                               :title)
                    "Sitemap")))
     (concat "#+TITLE: "
             (replace-regexp-in-string "[\n\r]+"
@@ -1001,20 +1123,22 @@ included in the default sitemap."
 (defun org-roam-blog--sitemap-source (entries)
   "Return Org sitemap source for manifest ENTRIES.
 
-The configured generator is called as (GENERATOR ENTRIES CONFIG),
-where ENTRIES have already been filtered, sorted, and had their
-displayed tags projected.  It must return an Org source string.
-Entries retain both `:published-time' and filesystem `:modified-time'
-metadata; the default generator only displays `:published-time'."
+The configured generator receives one plist containing `:entries'
+and `:config'.  Entries have already been filtered, sorted, and had
+their displayed tags projected.  The generator must return a complete
+Org source string.  Entries retain both `:published-time' and
+filesystem `:modified-time' metadata; the default generator only
+displays `:published-time'."
   (let* ((config org-roam-blog-sitemap)
          (prepared (org-roam-blog--sitemap-prepare-entries entries
                                                            config))
          (generator (or (plist-get config
                                    :generator)
                         #'org-roam-blog--sitemap-default-generator))
+         (context (list :entries prepared
+                        :config config))
          (source (funcall generator
-                          prepared
-                          config)))
+                          context)))
     (unless (stringp source)
       (error "Sitemap generator must return a string"))
     source))
@@ -1023,21 +1147,25 @@ metadata; the default generator only displays `:published-time'."
   "Generate and stage the configured sitemap from manifest ENTRIES.
 
 Return a cons pairing the sitemap target-relative path with its staged
-file, or nil when sitemap generation is disabled."
+file, or nil when sitemap generation is disabled.  Source generation
+and export run under the effective dynamic bindings.  Effective native
+body filters run before the merged sitemap body functions."
   (when (plist-get org-roam-blog-sitemap
                    :enable)
     (let* ((relative (plist-get org-roam-blog-sitemap
                                 :path))
            (output (org-roam-blog--staging-output staging
                                                   relative))
-           (template (org-roam-blog--merge-template (plist-get org-roam-blog-export-default
-                                                               :template)
-                                                    (plist-get org-roam-blog-sitemap
-                                                               :template)))
-           (bindings (org-roam-blog--merge-bindings (plist-get org-roam-blog-export-default
-                                                               :bindings)
-                                                    (plist-get org-roam-blog-sitemap
-                                                               :bindings))))
+           (export-configuration (org-roam-blog--export-configuration org-roam-blog-sitemap))
+           (template (plist-get export-configuration
+                                :template))
+           (bindings (plist-get export-configuration
+                                :bindings))
+           (body (plist-get export-configuration
+                            :body))
+           (context (org-roam-blog--make-body-context 'sitemap
+                                                      nil
+                                                      org-roam-blog-sitemap)))
       (make-directory (file-name-directory output)
                       t)
       (with-temp-buffer
@@ -1052,7 +1180,10 @@ file, or nil when sitemap generation is disabled."
          bindings
          (lambda ()
            (insert (org-roam-blog--sitemap-source entries))
-           (org-export-to-file 'html output nil nil nil nil template))))
+           (org-roam-blog--export-to-file output
+                                          template
+                                          body
+                                          context))))
       (cons relative
             output))))
 
@@ -1231,7 +1362,9 @@ to DIAGNOSTICS and return the resulting list."
                        (template (plist-get rule
                                             :template))
                        (bindings (plist-get rule
-                                            :bindings)))
+                                            :bindings))
+                       (body (plist-get rule
+                                        :body)))
                    (if (and (stringp name)
                             (not (string-empty-p name)))
                        (if (gethash name
@@ -1275,6 +1408,13 @@ to DIAGNOSTICS and return the resulting list."
                      (push (org-roam-blog--diagnostic 'error
                                                       subject
                                                       "The :bindings field must be an alist keyed by symbols.")
+                           diagnostics))
+                   (when (and (plist-member rule
+                                            :body)
+                              (not (org-roam-blog--function-list-p body)))
+                     (push (org-roam-blog--diagnostic 'error
+                                                      subject
+                                                      "The :body field must be a list of functions.")
                            diagnostics))
                    (dolist (key '(:sitemap :theindex))
                      (when (and (plist-member rule
@@ -1391,6 +1531,14 @@ to DIAGNOSTICS and return the resulting list."
           (push (org-roam-blog--diagnostic 'error
                                            subject
                                            "The :bindings field must be an alist keyed by symbols.")
+                diagnostics))
+        (when (and (plist-member org-roam-blog-sitemap
+                                 :body)
+                   (not (org-roam-blog--function-list-p (plist-get org-roam-blog-sitemap
+                                                                   :body))))
+          (push (org-roam-blog--diagnostic 'error
+                                           subject
+                                           "The :body field must be a list of functions.")
                 diagnostics))))
     diagnostics))
 
@@ -1431,6 +1579,14 @@ to DIAGNOSTICS and return the resulting list."
           (push (org-roam-blog--diagnostic 'error
                                            subject
                                            "The :bindings field must be an alist keyed by symbols.")
+                diagnostics))
+        (when (and (plist-member org-roam-blog-theindex
+                                 :body)
+                   (not (org-roam-blog--function-list-p (plist-get org-roam-blog-theindex
+                                                                   :body))))
+          (push (org-roam-blog--diagnostic 'error
+                                           subject
+                                           "The :body field must be a list of functions.")
                 diagnostics))))
     diagnostics))
 
@@ -1482,6 +1638,12 @@ synchronize Org-roam, or repair configuration."
         (push (org-roam-blog--diagnostic 'error
                                          'org-roam-blog-export-default
                                          "The :bindings field must be an alist keyed by symbols.")
+              diagnostics))
+      (unless (org-roam-blog--function-list-p (plist-get org-roam-blog-export-default
+                                                         :body))
+        (push (org-roam-blog--diagnostic 'error
+                                         'org-roam-blog-export-default
+                                         "The :body field must be a list of functions.")
               diagnostics)))
     (unless (and (stringp org-roam-blog-published-property)
                  (not (string-empty-p org-roam-blog-published-property)))
