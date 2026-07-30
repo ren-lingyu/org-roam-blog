@@ -1374,6 +1374,11 @@
                                 ":CUSTOM_ID: custom-heading\n"
                                 ":END:\n"
                                 "#+INDEX: Nested!Custom\n\n"
+                                "* Identified Heading\n"
+                                ":PROPERTIES:\n"
+                                ":ID: probe-id\n"
+                                ":END:\n"
+                                "#+INDEX: Nested!Identified\n\n"
                                 "* Ordinary Heading\n"
                                 "#+INDEX: Nested!Ordinary\n")
                         nil
@@ -1386,59 +1391,69 @@
                         source-b
                         nil
                         'silent)
-          (let ((staged (org-roam-blog--stage-generated-batch
-                         (list entry-a
-                               entry-b))))
-            (ert-info ((format "Staging result: %S"
-                               staged))
-              (should (eq (plist-get staged
-                                     :status)
-                          'success)))
-            (should (eq org-publish-cache
-                        outside-cache))
-            (should (eq org-id-locations
-                        outside-id-locations))
-            (should (equal org-id-locations-file
-                           outside-id-locations-file))
-            (should (equal org-export-filter-link-functions
-                           (list outside-link-filter)))
-            (should (eq (plist-get theindex-context
-                                   :kind)
-                        'theindex))
-            (let ((staged-theindex (cdr (plist-get staged
-                                                   :theindex))))
-              (should (file-regular-p staged-theindex))
-              (with-temp-buffer
-                (insert-file-contents staged-theindex)
-                (ert-info ((buffer-string))
-                  (should (search-forward "<title>Native Index</title>"
-                                          nil
-                                          t))
-                  (should (search-forward "../_store/uuid-a/a%20b%E4%B8%AD.html"
-                                          nil
-                                          t))
-                  (should (search-forward "#custom-heading"
-                                          nil
-                                          t))
-                  (should (re-search-forward "#org[[:xdigit:]]+"
-                                             nil
-                                             t))
-                  (should-not (search-forward "Must Not Appear"
-                                              nil
-                                              t))
-                  (should-not (search-forward source-root
-                                              nil
-                                              t)))))
-            (let ((promoted (org-roam-blog--promote-generated-batch staged)))
-              (ert-info ((format "Promotion result: %S"
-                                 promoted))
-                (should (eq (plist-get promoted
+          (cl-letf (((symbol-function 'org-id-find)
+                     (lambda (id &optional markerp)
+                       (when (equal id
+                                    "probe-id")
+                         (org-id-find-id-in-file id
+                                                 source-a
+                                                 markerp)))))
+            (let ((staged (org-roam-blog--stage-generated-batch
+                           (list entry-a
+                                 entry-b))))
+              (ert-info ((format "Staging result: %S"
+                                 staged))
+                (should (eq (plist-get staged
                                        :status)
                             'success)))
-              (should (file-regular-p theindex-output))
-              (should (member theindex-output
-                              (plist-get promoted
-                                         :promoted))))))
+              (should (eq org-publish-cache
+                          outside-cache))
+              (should (eq org-id-locations
+                          outside-id-locations))
+              (should (equal org-id-locations-file
+                             outside-id-locations-file))
+              (should (equal org-export-filter-link-functions
+                             (list outside-link-filter)))
+              (should (eq (plist-get theindex-context
+                                     :kind)
+                          'theindex))
+              (let ((staged-theindex (cdr (plist-get staged
+                                                     :theindex))))
+                (should (file-regular-p staged-theindex))
+                (with-temp-buffer
+                  (insert-file-contents staged-theindex)
+                  (ert-info ((buffer-string))
+                    (should (search-forward "<title>Native Index</title>"
+                                            nil
+                                            t))
+                    (should (search-forward "../_store/uuid-a/a%20b%E4%B8%AD.html"
+                                            nil
+                                            t))
+                    (should (search-forward "#custom-heading"
+                                            nil
+                                            t))
+                    (should (search-forward "#ID-probe-id"
+                                            nil
+                                            t))
+                    (should (re-search-forward "#org[[:xdigit:]]+"
+                                               nil
+                                               t))
+                    (should-not (search-forward "Must Not Appear"
+                                                nil
+                                                t))
+                    (should-not (search-forward source-root
+                                                nil
+                                                t)))))
+              (let ((promoted (org-roam-blog--promote-generated-batch staged)))
+                (ert-info ((format "Promotion result: %S"
+                                   promoted))
+                  (should (eq (plist-get promoted
+                                         :status)
+                              'success)))
+                (should (file-regular-p theindex-output))
+                (should (member theindex-output
+                                (plist-get promoted
+                                           :promoted)))))))
       (delete-directory root
                         t))))
 
