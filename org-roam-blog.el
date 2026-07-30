@@ -2115,13 +2115,6 @@ database queries.  Manifest, static enumeration, target, and conflict
 errors prevent publication."
   (let ((diagnostics (org-roam-blog--collect-diagnostics))
         entries static plan)
-    (when (and (not (org-roam-blog--diagnostics-have-errors-p diagnostics))
-               (plist-get org-roam-blog-theindex
-                          :enable))
-      (push (org-roam-blog--diagnostic 'error
-                                       'org-roam-blog-theindex
-                                       "Theindex publication is not implemented.")
-            diagnostics))
     (unless (org-roam-blog--diagnostics-have-errors-p diagnostics)
       (let ((manifest (org-roam-blog--build-manifest)))
         (setq entries (plist-get manifest

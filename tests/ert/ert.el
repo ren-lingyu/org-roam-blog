@@ -1178,6 +1178,37 @@
                     'failure))
         (should-not queried)))))
 
+(ert-deftest org-roam-blog-test-prepare-publication-allows-theindex ()
+  (let ((org-roam-blog-theindex (list :enable t
+                                      :path "theindex.html"))
+        planned)
+    (cl-letf (((symbol-function 'org-roam-blog--collect-diagnostics)
+               (lambda () nil))
+              ((symbol-function 'org-roam-blog--build-manifest)
+               (lambda ()
+                 '(:entries ((:source "/source/post.org"))
+                   :diagnostics nil)))
+              ((symbol-function 'org-roam-blog--static-files)
+               (lambda () nil))
+              ((symbol-function 'org-roam-blog--generated-output-plan)
+               (lambda (entries)
+                 (setq planned entries)
+                 nil))
+              ((symbol-function 'org-roam-blog--static-output-plan)
+               (lambda (_records) nil))
+              ((symbol-function 'org-roam-blog--output-conflicts)
+               (lambda (_plan) nil))
+              ((symbol-function 'org-roam-blog--output-target-diagnostics)
+               (lambda (_plan) nil)))
+      (let ((result (org-roam-blog--prepare-publication)))
+        (should (eq (plist-get result
+                               :status)
+                    'success))
+        (should (equal planned
+                       '((:source "/source/post.org"))))
+        (should-not (plist-get result
+                               :diagnostics))))))
+
 (ert-deftest org-roam-blog-test-prepare-publication-detects-static-conflict ()
   (let ((org-roam-blog-sitemap (list :enable t
                                      :path "index.html"))
