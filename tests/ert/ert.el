@@ -15,6 +15,11 @@
                                                 (list :with-toc nil))
                  '(:with-toc nil :section-numbers t))))
 
+(ert-deftest org-roam-blog-test-merge-template-replaces-list-value ()
+  (should (equal (org-roam-blog--merge-template (list :html-head-extra '("base"))
+                                                (list :html-head-extra '("override")))
+                 '(:html-head-extra ("override")))))
+
 (ert-deftest org-roam-blog-test-relative-path-validation ()
   (should (org-roam-blog--relative-path-p "_org"))
   (should (org-roam-blog--relative-path-p "."
@@ -66,6 +71,78 @@
                                           (plist-get diagnostic
                                                      :message)))
                         (org-roam-blog--validate-variables)))))
+
+(ert-deftest org-roam-blog-test-variable-validation-rejects-empty-published-property ()
+  (let ((org-roam-blog-directory "/tmp/source/")
+        (org-roam-blog-publish-directory "/tmp/public/")
+        (org-roam-blog-publish-store "_org")
+        (org-roam-blog-site-url nil)
+        (org-roam-blog-temporary-directory nil)
+        (org-roam-blog-default-template nil)
+        (org-roam-blog-published-property "")
+        (org-roam-blog-content nil)
+        (org-roam-blog-static nil)
+        (org-roam-blog-sitemap (list :enable nil))
+        (org-roam-blog-theindex (list :enable nil)))
+    (should (cl-find-if (lambda (diagnostic)
+                          (eq (plist-get diagnostic
+                                         :subject)
+                              'org-roam-blog-published-property))
+                        (org-roam-blog--validate-variables)))))
+
+(ert-deftest org-roam-blog-test-capabilities-check-org-roam-database-apis ()
+  (let ((capabilities (org-roam-blog--check-capabilities)))
+    (should (cl-find-if (lambda (capability)
+                          (eq (plist-get capability
+                                         :name)
+                              'org-roam-node-list))
+                        capabilities))
+    (should (cl-find-if (lambda (capability)
+                          (eq (plist-get capability
+                                         :name)
+                              'org-roam-db-query))
+                        capabilities))))
+
+(ert-deftest org-roam-blog-test-capabilities-report-missing-node-list-api ()
+  (cl-letf (((symbol-function 'org-roam-node-list) nil))
+    (let* ((capabilities (org-roam-blog--check-capabilities))
+           (capability (cl-find-if (lambda (candidate)
+                                     (eq (plist-get candidate
+                                                    :name)
+                                         'org-roam-node-list))
+                                   capabilities)))
+      (should capability)
+      (should (plist-get capability
+                         :required))
+      (should-not (plist-get capability
+                             :available))
+      (should (string-match-p "org-roam-node-list.*unavailable"
+                              (plist-get capability
+                                         :detail))))))
+
+(ert-deftest org-roam-blog-test-capabilities-report-missing-db-query-api ()
+  (cl-letf (((symbol-function 'org-roam-db-query) nil))
+    (let* ((capabilities (org-roam-blog--check-capabilities))
+           (capability (cl-find-if (lambda (candidate)
+                                     (eq (plist-get candidate
+                                                    :name)
+                                         'org-roam-db-query))
+                                   capabilities)))
+      (should capability)
+      (should (plist-get capability
+                         :required))
+      (should-not (plist-get capability
+                             :available))
+      (should (string-match-p "org-roam-db-query.*unavailable"
+                              (plist-get capability
+                                         :detail))))))
+
+(ert-deftest org-roam-blog-test-published-property-is-configurable ()
+  (let ((org-roam-blog-published-property "PDATE")
+        (node (org-roam-node-create
+               :properties '(("PDATE" . "2026-07-30")))))
+    (should (equal (org-roam-blog--node-published node)
+                   "2026-07-30"))))
 
 (ert-deftest org-roam-blog-test-sitemap-validates-visible-tags ()
   (dolist (config (list (list :enable nil
@@ -131,7 +208,10 @@
                      (lambda ()
                        (list (org-roam-node-create
                               :id "id" :title "Post" :file source :level 0
-                              :tags '("blog" "post"))))))
+                              :tags '("blog" "post")))))
+                    ((symbol-function 'org-roam-db-query)
+                     (lambda (&rest _arguments)
+                       nil)))
             (let* ((manifest (org-roam-blog--build-manifest))
                    (entry (car (plist-get manifest
                                           :entries))))
@@ -152,6 +232,49 @@
                                         :template)
                              '(:with-toc t))))))
       (delete-directory source-root t))))
+
+(ert-deftest org-roam-blog-test-manifest-reads-times-from-database ()
+  (let* ((source-root (make-temp-file "org-roam-blog-date-" t))
+         (source (expand-file-name "post.org"
+                                   source-root))
+         (modified '(27000 1000 0 0))
+         (org-roam-blog-directory source-root)
+         (org-roam-blog-publish-directory "/tmp/public/")
+         (org-roam-blog-publish-store "_org")
+         (org-roam-blog-default-template nil)
+         (org-roam-blog-published-property "PUBLISHED")
+         (org-roam-blog-content (list (list :name "post"
+                                            :tags '("blog" "post")
+                                            :sitemap t))))
+    (unwind-protect
+        (progn (write-region "#+TITLE: Post\n#+DATE: 2000-01-01\n"
+                             nil
+                             source
+                             nil
+                             'silent)
+          (cl-letf (((symbol-function 'org-roam-node-list)
+                     (lambda ()
+                       (list (org-roam-node-create
+                              :id "id"
+                              :title "Post"
+                              :file source
+                              :level 0
+                              :properties '(("PUBLISHED" . "2026-07-30"))
+                              :tags '("blog" "post")))))
+                    ((symbol-function 'org-roam-db-query)
+                     (lambda (&rest _arguments)
+                       (list (vector modified)))))
+            (let* ((manifest (org-roam-blog--build-manifest))
+                   (entry (car (plist-get manifest
+                                          :entries))))
+              (should (equal (plist-get entry
+                                        :published-at)
+                             "2026-07-30"))
+              (should (equal (plist-get entry
+                                        :modified)
+                             modified)))))
+      (delete-directory source-root
+                        t))))
 
 (ert-deftest org-roam-blog-test-manifest-reports-overlapping-rules ()
   (let* ((source-root (make-temp-file "org-roam-blog-source-" t))
@@ -176,7 +299,10 @@
                  :id "id" :title "Post" :file source :level 0
                  :tags '("blog" "post" "index")))
           (cl-letf (((symbol-function 'org-roam-node-list)
-                     (lambda () (list node))))
+                     (lambda () (list node)))
+                    ((symbol-function 'org-roam-db-query)
+                     (lambda (&rest _arguments)
+                       nil)))
             (let ((diagnostics (plist-get (org-roam-blog--build-manifest)
                                           :diagnostics)))
               (should (cl-find-if (lambda (diagnostic)
@@ -217,6 +343,32 @@
           (should (string-match-p "org-roam-blog-[0-9]\\{8\\}T[0-9]\\{6\\}-"
                                   (file-name-nondirectory first))))
       (delete-directory parent t))))
+
+(ert-deftest org-roam-blog-test-path-inside-rejects-symlink-escape ()
+  (let* ((root (make-temp-file "org-roam-blog-path-" t))
+         (inside (expand-file-name "inside"
+                                   root))
+         (outside (expand-file-name "outside"
+                                    root))
+         (link (expand-file-name "link"
+                                 inside))
+         (source (expand-file-name "post.org"
+                                   outside)))
+    (unwind-protect
+        (progn (make-directory inside)
+          (make-directory outside)
+          (write-region ""
+                        nil
+                        source
+                        nil
+                        'silent)
+          (make-symbolic-link outside
+                              link)
+          (should-not (org-roam-blog--path-inside-p (expand-file-name "post.org"
+                                                                      link)
+                                                    inside)))
+      (delete-directory root
+                        t))))
 
 (ert-deftest org-roam-blog-test-content-export-uses-disk-state-and-hooks ()
   (let* ((root (make-temp-file "org-roam-blog-export-" t))
@@ -343,9 +495,15 @@
   (let ((html (org-roam-blog--redirect-html (list :title "Index"
                                                   :redirect-relative "pages/index.html"
                                                   :store-relative "_org/permanent/id/index.html"))))
+    (should (string-match-p "<meta charset=\"utf-8\">"
+                            html))
+    (should (string-match-p "http-equiv=\"refresh\""
+                            html))
     (should (string-match-p "location\\.replace(\"\\.\\./_org/permanent/id/index\\.html\")"
                             html))
     (should (string-match-p "rel=\"canonical\" href=\"\\.\\./_org/permanent/id/index\\.html\""
+                            html))
+    (should (string-match-p "<a href=\"\\.\\./_org/permanent/id/index\\.html\">Index</a>"
                             html))))
 
 (ert-deftest org-roam-blog-test-sitemap-projects-tags ()
@@ -357,6 +515,31 @@
   (should-not (org-roam-blog--project-sitemap-tags '("blog" "post")
                                                    nil)))
 
+(ert-deftest org-roam-blog-test-sitemap-sorts-published-entries-first ()
+  (let* ((config (list :sort 'anti-chronologically
+                       :visible-tags nil))
+         (undated (list :title "Undated"
+                        :published-at nil
+                        :tags nil
+                        :sitemap t))
+         (older (list :title "Older"
+                      :published-at "2025-01-01"
+                      :tags nil
+                      :sitemap t))
+         (newer (list :title "Newer"
+                      :published-at "2026-01-01"
+                      :tags nil
+                      :sitemap t))
+         (prepared (org-roam-blog--prepare-sitemap-entries (list undated
+                                                                  older
+                                                                  newer)
+                                                            config)))
+    (should (equal (mapcar (lambda (entry)
+                             (plist-get entry
+                                        :title))
+                           prepared)
+                   '("Newer" "Older" "Undated")))))
+
 (ert-deftest org-roam-blog-test-default-sitemap-uses-relative-urls ()
   (let* ((config (list :path "pages/sitemap.html"
                        :title "Posts"
@@ -364,6 +547,8 @@
          (entries (list (list :title "Post"
                               :source-relative "post.org"
                               :store-relative "_org/id/post.html"
+                              :published-at "2026-07-30"
+                              :modified "MODIFIED-MUST-NOT-BE-DISPLAYED"
                               :tags '("blog" "emacs")
                               :sitemap t)))
          (prepared (org-roam-blog--prepare-sitemap-entries entries
@@ -372,6 +557,10 @@
                                                           config)))
     (should (string-match-p "\\[\\[file:\\.\\./_org/id/post\\.html\\]\\[Post\\]\\]"
                             content))
+    (should (string-match-p "2026-07-30"
+                            content))
+    (should-not (string-match-p "MODIFIED-MUST-NOT-BE-DISPLAYED"
+                                content))
     (should (string-match-p "(emacs)" content))
     (should-not (string-match-p "blog" content))))
 

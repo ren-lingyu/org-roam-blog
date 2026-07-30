@@ -119,6 +119,17 @@ does not interpret or whitelist exporter-specific option keys."
   :type 'plist
   :group 'org-roam-blog)
 
+(defcustom org-roam-blog-published-property "PUBLISHED"
+  "Org-roam node property containing the publication time.
+
+The value is a non-empty property name.  Org-roam Blog reads this
+property from the Org-roam database and stores its value as manifest
+metadata.  The package never creates, updates, or infers this
+property, because a local export does not establish when content was
+actually deployed."
+  :type 'string
+  :group 'org-roam-blog)
+
 (defcustom org-roam-blog-content nil
   "Rules selecting Org-roam files and describing their publication.
 
@@ -346,6 +357,23 @@ database or scan the source directory."
        (org-roam-blog--node-matches-tags-p node tags))
      (org-roam-node-list))))
 
+(defun org-roam-blog--node-published (node)
+  "Return publication metadata cached for Org-roam NODE, or nil."
+  (cdr (assoc-string org-roam-blog-published-property
+                     (org-roam-node-properties node)
+                     t)))
+
+(defun org-roam-blog--file-modified-time (source)
+  "Return the cached Org-roam file modification time for SOURCE.
+
+Return nil when the Org-roam files table has no row for SOURCE."
+  (when-let* ((row (car (org-roam-db-query
+                         [:select mtime
+                          :from files
+                          :where (= file $s1)]
+                         source))))
+    (elt row 0)))
+
 (defun org-roam-blog--manifest-entry (node rule)
   "Build a manifest entry for Org-roam NODE selected by RULE.
 
@@ -389,7 +417,8 @@ diagnostic."
                         :content-name (plist-get rule
                                                  :name)
                         :tags (copy-sequence (org-roam-node-tags node))
-                        :date nil
+                        :published-at (org-roam-blog--node-published node)
+                        :modified (org-roam-blog--file-modified-time source)
                         :sitemap (and (plist-get rule
                                                 :sitemap)
                                       t)
@@ -415,7 +444,9 @@ The return value is a plist with `:entries' and `:diagnostics'.  Files
 are selected only through the Org-roam database.  A real source file
 matching multiple content rules is diagnosed as unsupported.  A
 second database node for the same real file and rule is ignored and
-reported as a warning."
+reported as a warning.  Publication and modification times are read
+from cached node properties and the Org-roam files table; the
+manifest builder does not parse Org files for metadata."
   (let ((by-truename (make-hash-table :test #'equal))
         entries diagnostics)
     (dolist (rule org-roam-blog-content)
@@ -802,15 +833,15 @@ redirect file."
 
 (defun org-roam-blog--sitemap-entry-time (entry)
   "Return a sortable time value from sitemap ENTRY, or nil."
-  (let ((date (plist-get entry
-                         :date)))
-    (cond ((null date)
+  (let ((published (plist-get entry
+                              :published-at)))
+    (cond ((null published)
            nil)
-          ((stringp date)
+          ((stringp published)
            (condition-case nil
-               (org-time-string-to-time date)
+               (org-time-string-to-time published)
              (error nil)))
-          ((listp date) date)
+          ((listp published) published)
           (t
            nil))))
 
@@ -853,7 +884,11 @@ redirect file."
                             t))
 
 (defun org-roam-blog--default-sitemap-content (entries config)
-  "Return default Org sitemap content for ENTRIES and CONFIG."
+  "Return default Org sitemap content for ENTRIES and CONFIG.
+
+Display each entry's `:published-at' value when present.  The
+filesystem `:modified' time remains manifest metadata and is not
+included in the default sitemap."
   (let ((path (plist-get config
                          :path))
         (title (or (plist-get config
@@ -874,9 +909,18 @@ redirect file."
                                                                                                  :title)
                                                                                       (plist-get entry
                                                                                                  :source-relative))))
+                                (published (plist-get entry
+                                                      :published-at))
                                 (tags (plist-get entry
                                                  :tags)))
                            (concat "- [[file:" url "][" description "]]"
+                                   (when published
+                                     (concat " "
+                                             (replace-regexp-in-string "[\n\r]+"
+                                                                       " "
+                                                                       published
+                                                                       t
+                                                                       t)))
                                    (when tags
                                      (concat " ("
                                              (mapconcat #'org-roam-blog--org-link-description
@@ -893,7 +937,9 @@ redirect file."
 The configured content function is called as (FUNCTION ENTRIES
 CONFIG), where ENTRIES have already been filtered, sorted, and had
 their displayed tags projected.  It must return an Org source
-string."
+string.  Entries retain both `:published-at' and filesystem
+`:modified' metadata; the default generator only displays
+`:published-at'."
   (let* ((config org-roam-blog-sitemap)
          (prepared (org-roam-blog--prepare-sitemap-entries entries
                                                            config))
@@ -1325,6 +1371,12 @@ synchronize Org-roam, or repair configuration."
                                        'org-roam-blog-default-template
                                        "Value must be a proper even-length plist.")
             diagnostics))
+    (unless (and (stringp org-roam-blog-published-property)
+                 (not (string-empty-p org-roam-blog-published-property)))
+      (push (org-roam-blog--diagnostic 'error
+                                       'org-roam-blog-published-property
+                                       "Value must be a non-empty property name.")
+            diagnostics))
     (setq diagnostics (org-roam-blog--validate-content diagnostics))
     (setq diagnostics (org-roam-blog--validate-static diagnostics))
     (setq diagnostics (org-roam-blog--validate-sitemap diagnostics))
@@ -1354,37 +1406,41 @@ synchronize the Org-roam database."
     (list (org-roam-blog--capability 'org-export
                                      (fboundp 'org-export-to-file)
                                      t
-                                     "`org-export-to-file' is available.")
+                                     "Required function `org-export-to-file' is unavailable.")
           (org-roam-blog--capability 'ox-html
                                      (fboundp 'org-html-export-to-html)
                                      t
-                                     "`org-html-export-to-html' is available.")
+                                     "Required function `org-html-export-to-html' is unavailable.")
           (org-roam-blog--capability 'org-publish
                                      (fboundp 'org-publish-attachment)
                                      t
-                                     "`org-publish-attachment' is available.")
+                                     "Required function `org-publish-attachment' is unavailable.")
+          (org-roam-blog--capability 'org-roam-node-list
+                                     (fboundp 'org-roam-node-list)
+                                     t
+                                     "Required function `org-roam-node-list' is unavailable.")
           (org-roam-blog--capability 'org-roam-db-query
                                      (fboundp 'org-roam-db-query)
                                      t
-                                     "`org-roam-db-query' is available.")
+                                     "Required function `org-roam-db-query' is unavailable.")
           (org-roam-blog--capability 'url-parse
                                      (fboundp 'url-generic-parse-url)
                                      t
-                                     "`url-generic-parse-url' is available.")
+                                     "Required function `url-generic-parse-url' is unavailable.")
           (org-roam-blog--capability 'real-path
                                      (fboundp 'file-truename)
                                      t
-                                     "`file-truename' is available.")
+                                     "Required function `file-truename' is unavailable.")
           (org-roam-blog--capability 'staging
                                      (and (fboundp 'make-temp-file)
                                           (fboundp 'rename-file)
                                           (fboundp 'copy-file))
                                      t
-                                     "Temporary directories and file promotion are available.")
+                                     "Required staging and file-promotion functions are unavailable.")
           (org-roam-blog--capability 'org-publish-index
                                      (fboundp 'org-publish-collect-index)
                                      theindex-enabled
-                                     "`org-publish-collect-index' is available."))))
+                                     "Required function `org-publish-collect-index' is unavailable."))))
 
 (defun org-roam-blog--collect-diagnostics ()
   "Return variable and required-capability diagnostics."
