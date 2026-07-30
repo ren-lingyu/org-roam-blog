@@ -302,7 +302,9 @@ and paths containing a parent-directory component, are rejected."
 Both arguments are paths relative to the publication root."
   (unless (and (org-roam-blog--relative-file-p from-file)
                (org-roam-blog--relative-file-p to-file))
-    (error "Unsafe relative URL paths: %S and %S" from-file to-file))
+    (error "Unsafe relative URL paths: %S and %S"
+           from-file
+           to-file))
   (org-roam-blog--encode-url-path
    (file-relative-name to-file (file-name-directory from-file))))
 
@@ -315,7 +317,8 @@ an absolute URL is explicitly required."
   (unless org-roam-blog-site-url
     (error "`org-roam-blog-site-url' is not configured"))
   (unless (org-roam-blog--relative-file-p relative-path)
-    (error "Unsafe relative URL path: %S" relative-path))
+    (error "Unsafe relative URL path: %S"
+           relative-path))
   (concat org-roam-blog-site-url
           (org-roam-blog--encode-url-path relative-path)))
 
@@ -336,7 +339,8 @@ make a source appear to be within the configured directory."
 (defun org-roam-blog--output-path (relative-path)
   "Expand safe RELATIVE-PATH below the publication directory."
   (unless (org-roam-blog--relative-file-p relative-path)
-    (error "Unsafe relative output path: %S" relative-path))
+    (error "Unsafe relative output path: %S"
+           relative-path))
   (expand-file-name relative-path org-roam-blog-publish-directory))
 
 (defun org-roam-blog--valid-site-url-p (value)
@@ -628,7 +632,8 @@ error."
              for regexp = (org-roam-blog--static-extension-regexp mapping)
              do
              (unless (file-directory-p base)
-               (error "Static source directory does not exist: %s" base))
+               (error "Static source directory does not exist: %s"
+                      base))
              (dolist (source (directory-files-recursively base
                                                           regexp
                                                           nil
