@@ -20,6 +20,20 @@
                                                 (list :html-head-extra '("override")))
                  '(:html-head-extra ("override")))))
 
+(ert-deftest org-roam-blog-test-merge-bindings-overrides-by-symbol ()
+  (let ((base (list (cons 'org-html-head "base")
+                    (cons 'org-html-postamble t)))
+        (override (list (cons 'org-html-head nil)
+                        (cons 'org-html-preamble t))))
+    (should (equal (org-roam-blog--merge-bindings base
+                                                  override)
+                   (list (cons 'org-html-head nil)
+                         (cons 'org-html-postamble t)
+                         (cons 'org-html-preamble t))))
+    (should (equal base
+                   (list (cons 'org-html-head "base")
+                         (cons 'org-html-postamble t))))))
+
 (ert-deftest org-roam-blog-test-relative-path-validation ()
   (should (org-roam-blog--relative-path-p "_org"))
   (should (org-roam-blog--relative-path-p "."
@@ -89,6 +103,43 @@
                                          :subject)
                               'org-roam-blog-published-property))
                         (org-roam-blog--validate-variables)))))
+
+(ert-deftest org-roam-blog-test-variable-validation-rejects-invalid-bindings ()
+  (let ((org-roam-blog-directory "/tmp/source/")
+        (org-roam-blog-publish-directory "/tmp/public/")
+        (org-roam-blog-publish-store "_org")
+        (org-roam-blog-site-url nil)
+        (org-roam-blog-temporary-directory nil)
+        (org-roam-blog-default-template nil)
+        (org-roam-blog-default-bindings '(("org-html-head" . "invalid")))
+        (org-roam-blog-content nil)
+        (org-roam-blog-static nil)
+        (org-roam-blog-sitemap (list :enable nil))
+        (org-roam-blog-theindex (list :enable nil)))
+    (should (cl-find-if (lambda (diagnostic)
+                          (eq (plist-get diagnostic
+                                         :subject)
+                              'org-roam-blog-default-bindings))
+                        (org-roam-blog--validate-variables)))))
+
+(ert-deftest org-roam-blog-test-object-validation-rejects-invalid-bindings ()
+  (let* ((org-roam-blog-content (list (list :name "post"
+                                            :tags '("blog" "post")
+                                            :bindings '(("org-html-head" . "invalid")))))
+         (diagnostics (org-roam-blog--validate-content nil)))
+    (should (cl-find-if (lambda (diagnostic)
+                          (string-match-p ":bindings field must be an alist keyed by symbols"
+                                          (plist-get diagnostic
+                                                     :message)))
+                        diagnostics)))
+  (let* ((org-roam-blog-sitemap (list :enable nil
+                                      :bindings '(("org-html-head" . "invalid"))))
+         (diagnostics (org-roam-blog--validate-sitemap nil)))
+    (should (cl-find-if (lambda (diagnostic)
+                          (string-match-p ":bindings field must be an alist keyed by symbols"
+                                          (plist-get diagnostic
+                                                     :message)))
+                        diagnostics))))
 
 (ert-deftest org-roam-blog-test-capabilities-check-org-roam-database-apis ()
   (let ((capabilities (org-roam-blog--check-capabilities)))
@@ -191,11 +242,14 @@
          (org-roam-blog-publish-directory "/tmp/public/")
          (org-roam-blog-publish-store "_org")
          (org-roam-blog-default-template (list :with-toc nil))
+         (org-roam-blog-default-bindings (list (cons 'org-html-head "default")
+                                               (cons 'org-html-postamble t)))
          (org-roam-blog-content (list (list :name "post"
                                             :tags '("blog" "post")
                                             :directory "posts"
                                             :sitemap t
-                                            :template (list :with-toc t)))))
+                                            :template (list :with-toc t)
+                                            :bindings (list (cons 'org-html-head nil))))))
     (unwind-protect
         (progn (make-directory nested
                                t)
@@ -230,7 +284,11 @@
                                  :sitemap))
               (should (equal (plist-get entry
                                         :template)
-                             '(:with-toc t))))))
+                             '(:with-toc t)))
+              (should (equal (plist-get entry
+                                        :bindings)
+                             (list (cons 'org-html-head nil)
+                                   (cons 'org-html-postamble t)))))))
       (delete-directory source-root t))))
 
 (ert-deftest org-roam-blog-test-manifest-reads-times-from-database ()
@@ -376,11 +434,15 @@
          (staging (expand-file-name "staging" root))
          (visiting nil)
          (hook-ran nil)
+         (bound-head nil)
+         (org-html-head "outside")
          (org-export-before-processing-hook (list (lambda (_backend)
-                                                   (setq hook-ran t))))
+                                                   (setq hook-ran t)
+                                                   (setq bound-head org-html-head))))
          (entry (list :source source
                       :store-relative "_org/post.html"
-                      :template (list :with-author nil))))
+                      :template (list :with-author nil)
+                      :bindings (list (cons 'org-html-head "inside")))))
     (unwind-protect
         (progn (write-region "#+TITLE: Disk title\n\nDisk body\n"
                              nil
@@ -395,6 +457,10 @@
           (let ((output (org-roam-blog--export-content-entry entry
                                                               staging)))
             (should hook-ran)
+            (should (equal bound-head
+                           "inside"))
+            (should (equal org-html-head
+                           "outside"))
             (with-temp-buffer
               (insert-file-contents output)
               (should (search-forward "Disk body" nil t))
@@ -404,6 +470,18 @@
           (set-buffer-modified-p nil))
         (kill-buffer visiting))
       (delete-directory root t))))
+
+(ert-deftest org-roam-blog-test-export-bindings-restore-after-error ()
+  (let ((org-html-head "outside"))
+    (should-error
+     (org-roam-blog--call-with-export-bindings
+      (list (cons 'org-html-head "inside"))
+      (lambda ()
+        (should (equal org-html-head
+                       "inside"))
+        (error "Export failed"))))
+    (should (equal org-html-head
+                   "outside"))))
 
 (ert-deftest org-roam-blog-test-content-batch-promotes-and-cleans-staging ()
   (let* ((root (make-temp-file "org-roam-blog-batch-" t))
@@ -592,11 +670,15 @@
          (org-roam-blog-publish-directory publish)
          (org-roam-blog-temporary-directory temporary)
          (org-roam-blog-default-template (list :with-author nil))
+         (org-roam-blog-default-bindings (list (cons 'org-html-head "default-head")))
+         (org-html-head "outside-head")
          (org-roam-blog-sitemap (list :enable t
                                       :path "sitemap.html"
                                       :title "Posts"
                                       :sort 'anti-chronologically
-                                      :visible-tags nil))
+                                      :visible-tags nil
+                                      :bindings (list (cons 'org-html-head
+                                                            "<meta name=\"sitemap-binding\">"))))
          (org-roam-blog-theindex (list :enable nil))
          (entry (list :title "Index"
                       :source source
@@ -624,6 +706,14 @@
                                                       publish)))
             (should (file-regular-p (expand-file-name "index.html"
                                                       publish)))
+            (with-temp-buffer
+              (insert-file-contents (expand-file-name "sitemap.html"
+                                                      publish))
+              (should (search-forward "<meta name=\"sitemap-binding\">"
+                                      nil
+                                      t)))
+            (should (equal org-html-head
+                           "outside-head"))
             (should (equal (plist-get result
                                       :promoted)
                            (list store-output

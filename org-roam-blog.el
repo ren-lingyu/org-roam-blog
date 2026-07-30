@@ -28,7 +28,9 @@
 ;;; Commentary:
 
 ;; Org-roam Blog publishes blog content selected from the Org-roam database
-;; while preserving standard Org export behavior.
+;; while preserving standard Org export behavior.  Export templates and
+;; dynamically scoped variable bindings customize generated documents without
+;; permanently changing Org or export-backend global state.
 ;; Link resolution, including the HTML anchors emitted for `id:' links,
 ;; remains the responsibility of Org and the selected export backend.
 ;;
@@ -119,6 +121,23 @@ does not interpret or whitelist exporter-specific option keys."
   :type 'plist
   :group 'org-roam-blog)
 
+(defcustom org-roam-blog-default-bindings nil
+  "Default dynamic variable bindings used during generated Org export.
+
+The value is an alist whose keys are variable symbols.  Each binding
+is active only while Org-roam Blog prepares and exports one generated
+Org document, and the previous dynamic value is restored afterwards.
+This permits local configuration of Org and export-backend variables
+such as `org-html-head', `org-html-preamble-format',
+`org-export-global-macros', and export hook variables without
+permanently changing their global values.
+
+An object's `:bindings' alist overrides entries with the same symbol.
+An explicitly present nil value is a valid override."
+  :type '(alist :key-type symbol
+                :value-type sexp)
+  :group 'org-roam-blog)
+
 (defcustom org-roam-blog-published-property "PUBLISHED"
   "Org-roam node property containing the publication time.
 
@@ -136,14 +155,16 @@ actually deployed."
 Each element is a plist with this schema:
 
   (:name NAME :tags TAGS :directory DIRECTORY
-   :sitemap BOOLEAN :theindex BOOLEAN :template PLIST)
+   :sitemap BOOLEAN :theindex BOOLEAN :template PLIST
+   :bindings ALIST)
 
 NAME is a unique non-empty string.  TAGS is a non-empty list of
 strings, all of which must occur on a level-0 Org-roam node.
 DIRECTORY is nil or a directory relative to
 `org-roam-blog-publish-directory' in which a redirect is generated.
 The two boolean fields select generated indexes.  TEMPLATE shallowly
-overrides `org-roam-blog-default-template'.
+overrides `org-roam-blog-default-template'.  BINDINGS overrides
+`org-roam-blog-default-bindings' by variable symbol.
 
 A file matching more than one rule is an unsupported configuration
 and will be diagnosed before publication."
@@ -172,7 +193,7 @@ The supported schema is:
 
   (:enable BOOLEAN :path RELATIVE-FILE :title STRING :sort SYMBOL
    :visible-tags TAGS-OR-NIL
-   :content-function FUNCTION-OR-NIL :template PLIST)
+   :content-function FUNCTION-OR-NIL :template PLIST :bindings ALIST)
 
 Only tags explicitly listed in `:visible-tags' are displayed by the
 sitemap.  A missing or nil value displays no tags.  This whitelist
@@ -188,7 +209,8 @@ must return an Org source string."
 
 The supported schema is:
 
-  (:enable BOOLEAN :path RELATIVE-FILE :title STRING :template PLIST)
+  (:enable BOOLEAN :path RELATIVE-FILE :title STRING
+   :template PLIST :bindings ALIST)
 
 When disabled, capabilities needed only for index collection are not
 required."
@@ -196,7 +218,7 @@ required."
   :group 'org-roam-blog)
 
 (defconst org-roam-blog--content-keys
-  '(:name :tags :directory :sitemap :theindex :template))
+  '(:name :tags :directory :sitemap :theindex :template :bindings))
 
 (defconst org-roam-blog--static-keys
   '(:source :directory :extensions))
@@ -206,10 +228,10 @@ required."
   "Default regexp matching static file extensions.")
 
 (defconst org-roam-blog--sitemap-keys
-  '(:enable :path :title :sort :visible-tags :content-function :template))
+  '(:enable :path :title :sort :visible-tags :content-function :template :bindings))
 
 (defconst org-roam-blog--theindex-keys
-  '(:enable :path :title :template))
+  '(:enable :path :title :template :bindings))
 
 (defun org-roam-blog--diagnostic (severity subject message)
   "Return a diagnostic with SEVERITY, SUBJECT, and MESSAGE.
@@ -224,6 +246,14 @@ human-readable explanation."
   (and (listp value)
        (proper-list-p value)
        (cl-evenp (length value))))
+
+(defun org-roam-blog--bindings-p (value)
+  "Return non-nil when VALUE is an alist keyed by variable symbols."
+  (and (proper-list-p value)
+       (cl-every (lambda (binding)
+                   (and (consp binding)
+                        (symbolp (car binding))))
+                 value)))
 
 (defun org-roam-blog--unknown-keys (plist allowed)
   "Return keys in PLIST that do not occur in ALLOWED."
@@ -338,6 +368,32 @@ BASE.  Neither argument is modified."
             tail (cddr tail)))
     result))
 
+(defun org-roam-blog--merge-bindings (base override)
+  "Merge dynamic binding alist OVERRIDE over BASE by variable symbol.
+
+An explicitly present nil value in OVERRIDE replaces the value from
+BASE.  Neither argument is modified."
+  (let ((result (copy-tree base)))
+    (dolist (binding override)
+      (if-let* ((existing (assq (car binding)
+                                result)))
+          (setcdr existing
+                  (cdr binding))
+        (setq result (append result
+                             (list (copy-tree binding))))))
+    result))
+
+(defun org-roam-blog--call-with-export-bindings (bindings function)
+  "Call FUNCTION with dynamic variable BINDINGS.
+
+BINDINGS is an alist mapping variable symbols to values.  Restore all
+previous dynamic values when FUNCTION returns or signals an error."
+  (cl-progv (mapcar #'car
+                    bindings)
+            (mapcar #'cdr
+                    bindings)
+    (funcall function)))
+
 (defun org-roam-blog--node-matches-tags-p (node tags)
   "Return non-nil when level-0 NODE contains all configured TAGS."
   (and (= (org-roam-node-level node) 0)
@@ -427,7 +483,10 @@ diagnostic."
                                        t)
                         :template (org-roam-blog--merge-template org-roam-blog-default-template
                                                                  (plist-get rule
-                                                                            :template)))
+                                                                            :template))
+                        :bindings (org-roam-blog--merge-bindings org-roam-blog-default-bindings
+                                                                 (plist-get rule
+                                                                            :bindings)))
                   nil)))
       (file-error (cons nil
                         (org-roam-blog--diagnostic 'error
@@ -729,9 +788,10 @@ contains a timestamp followed by the unique suffix generated by
 
 The source file is read into a fresh temporary buffer, so unsaved
 changes in an existing visiting buffer are ignored.  Standard Org
-export hooks and filters remain active.  Links are passed to Org
-unchanged; in particular, this package does not repair or reinterpret
-`id:' links or their HTML anchors.  Return the staged output file."
+export hooks and filters remain active under the entry's dynamic
+`:bindings' environment.  Links are passed to Org unchanged; in
+particular, this package does not repair or reinterpret `id:' links
+or their HTML anchors.  Return the staged output file."
   (let* ((source (plist-get entry
                             :source))
          (relative (plist-get entry
@@ -739,7 +799,9 @@ unchanged; in particular, this package does not repair or reinterpret
          (output (org-roam-blog--staging-output staging
                                                 relative))
          (template (plist-get entry
-                              :template)))
+                              :template))
+         (bindings (plist-get entry
+                              :bindings)))
     (make-directory (file-name-directory output)
                     t)
     (with-temp-buffer
@@ -747,7 +809,10 @@ unchanged; in particular, this package does not repair or reinterpret
       (setq buffer-file-name source)
       (setq default-directory (file-name-directory source))
       (org-mode)
-      (org-export-to-file 'html output nil nil nil nil template))
+      (org-roam-blog--call-with-export-bindings
+       bindings
+       (lambda ()
+         (org-export-to-file 'html output nil nil nil nil template))))
     output))
 
 (defun org-roam-blog--stage-content (entries staging)
@@ -966,11 +1031,13 @@ file, or nil when sitemap generation is disabled."
                                                   relative))
            (template (org-roam-blog--merge-template org-roam-blog-default-template
                                                     (plist-get org-roam-blog-sitemap
-                                                               :template))))
+                                                               :template)))
+           (bindings (org-roam-blog--merge-bindings org-roam-blog-default-bindings
+                                                    (plist-get org-roam-blog-sitemap
+                                                               :bindings))))
       (make-directory (file-name-directory output)
                       t)
       (with-temp-buffer
-        (insert (org-roam-blog--sitemap-content entries))
         (org-mode)
         ;; `org-mode' establishes buffer-local path state.  Set the
         ;; virtual source location afterwards so relative links are
@@ -978,7 +1045,11 @@ file, or nil when sitemap generation is disabled."
         (setq buffer-file-name (org-roam-blog--replace-extension output
                                                                  ".org"))
         (setq default-directory (file-name-directory output))
-        (org-export-to-file 'html output nil nil nil nil template))
+        (org-roam-blog--call-with-export-bindings
+         bindings
+         (lambda ()
+           (insert (org-roam-blog--sitemap-content entries))
+           (org-export-to-file 'html output nil nil nil nil template))))
       (cons relative
             output))))
 
@@ -1155,7 +1226,9 @@ to DIAGNOSTICS and return the resulting list."
                        (directory (plist-get rule
                                              :directory))
                        (template (plist-get rule
-                                            :template)))
+                                            :template))
+                       (bindings (plist-get rule
+                                            :bindings)))
                    (if (and (stringp name)
                             (not (string-empty-p name)))
                        (if (gethash name
@@ -1192,6 +1265,13 @@ to DIAGNOSTICS and return the resulting list."
                      (push (org-roam-blog--diagnostic 'error
                                                       subject
                                                       "The :template field must be a plist.")
+                           diagnostics))
+                   (when (and (plist-member rule
+                                            :bindings)
+                              (not (org-roam-blog--bindings-p bindings)))
+                     (push (org-roam-blog--diagnostic 'error
+                                                      subject
+                                                      "The :bindings field must be an alist keyed by symbols.")
                            diagnostics))
                    (dolist (key '(:sitemap :theindex))
                      (when (and (plist-member rule
@@ -1300,6 +1380,14 @@ to DIAGNOSTICS and return the resulting list."
           (push (org-roam-blog--diagnostic 'error
                                            subject
                                            "The :template field must be a plist.")
+                diagnostics))
+        (when (and (plist-member org-roam-blog-sitemap
+                                 :bindings)
+                   (not (org-roam-blog--bindings-p (plist-get org-roam-blog-sitemap
+                                                              :bindings))))
+          (push (org-roam-blog--diagnostic 'error
+                                           subject
+                                           "The :bindings field must be an alist keyed by symbols.")
                 diagnostics))))
     diagnostics))
 
@@ -1332,6 +1420,14 @@ to DIAGNOSTICS and return the resulting list."
           (push (org-roam-blog--diagnostic 'error
                                            subject
                                            "The :template field must be a plist.")
+                diagnostics))
+        (when (and (plist-member org-roam-blog-theindex
+                                 :bindings)
+                   (not (org-roam-blog--bindings-p (plist-get org-roam-blog-theindex
+                                                              :bindings))))
+          (push (org-roam-blog--diagnostic 'error
+                                           subject
+                                           "The :bindings field must be an alist keyed by symbols.")
                 diagnostics))))
     diagnostics))
 
@@ -1370,6 +1466,11 @@ synchronize Org-roam, or repair configuration."
       (push (org-roam-blog--diagnostic 'error
                                        'org-roam-blog-default-template
                                        "Value must be a proper even-length plist.")
+            diagnostics))
+    (unless (org-roam-blog--bindings-p org-roam-blog-default-bindings)
+      (push (org-roam-blog--diagnostic 'error
+                                       'org-roam-blog-default-bindings
+                                       "Value must be an alist keyed by symbols.")
             diagnostics))
     (unless (and (stringp org-roam-blog-published-property)
                  (not (string-empty-p org-roam-blog-published-property)))
@@ -1621,11 +1722,13 @@ it reports a short message and returns non-nil."
 Validate configuration and capabilities, query Org-roam, construct
 the complete output plan, and reject conflicts before writing.  Stage
 all generated Org output, publish static attachments directly, and
-then promote generated content.  The command never synchronizes the
-Org-roam database or permanently modifies Org Publish configuration.
-Org links retain the selected export backend's native semantics; this
-package does not rewrite `id:' links or compensate for mismatches
-between their fragments and exported anchors.
+then promote generated content.  Apply configured export variable
+bindings dynamically for each generated Org document and restore
+their previous values afterwards.  The command never synchronizes
+the Org-roam database or permanently modifies Org Publish
+configuration.  Org links retain the selected export backend's native
+semantics; this package does not rewrite `id:' links or compensate
+for mismatches between their fragments and exported anchors.
 
 On failure, display the unified diagnostics report.  A retained
 staging directory and any partially published targets are included in
