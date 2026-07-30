@@ -346,6 +346,37 @@
                               (plist-get capability
                                          :detail))))))
 
+(ert-deftest org-roam-blog-test-static-capability-is-conditional ()
+  (cl-letf (((symbol-function 'org-publish-attachment) nil))
+    (let* ((org-roam-blog-static nil)
+           (capabilities (org-roam-blog--check-capabilities))
+           (capability (cl-find-if
+                        (lambda (candidate)
+                          (eq (plist-get candidate
+                                         :name)
+                              'org-publish-attachment))
+                        capabilities)))
+      (should capability)
+      (should-not (plist-get capability
+                             :required))
+      (should-not (plist-get capability
+                             :available)))
+    (let* ((org-roam-blog-static
+            (list (list :source "/assets"
+                        :directory "static")))
+           (capabilities (org-roam-blog--check-capabilities))
+           (capability (cl-find-if
+                        (lambda (candidate)
+                          (eq (plist-get candidate
+                                         :name)
+                              'org-publish-attachment))
+                        capabilities)))
+      (should capability)
+      (should (plist-get capability
+                         :required))
+      (should-not (plist-get capability
+                             :available)))))
+
 (ert-deftest org-roam-blog-test-theindex-validates-title ()
   (let* ((org-roam-blog-theindex (list :enable t
                                        :path "theindex.html"
@@ -483,6 +514,22 @@
                                             (plist-get diagnostic
                                                        :message)))
                           diagnostics)))))
+
+(ert-deftest org-roam-blog-test-sitemap-validates-title-and-sort ()
+  (dolist (config (list (list :enable nil
+                              :title "Posts"
+                              :sort nil)
+                        (list :enable nil
+                              :sort 'anti-chronologically)))
+    (let ((org-roam-blog-sitemap config))
+      (should-not (org-roam-blog--validate-sitemap nil))))
+  (dolist (config (list (list :enable nil
+                              :title 1)
+                        (list :enable nil
+                              :sort 'alphabetically)))
+    (let* ((org-roam-blog-sitemap config)
+           (diagnostics (org-roam-blog--validate-sitemap nil)))
+      (should diagnostics))))
 
 (ert-deftest org-roam-blog-test-query-rule-nodes-matches-all-tags ()
   (let ((nodes (list (org-roam-node-create
