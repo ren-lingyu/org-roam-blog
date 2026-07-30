@@ -239,7 +239,9 @@ The supported schema is:
    :template PLIST :bindings ALIST :body FUNCTION-LIST)
 
 When disabled, capabilities needed only for index collection are not
-required."
+required.  Index collection reuses `org-publish-collect-index' with
+an in-memory, dynamically bound Org Publish cache; it does not
+initialize or persist the user's Publish cache."
   :type 'plist
   :group 'org-roam-blog)
 
@@ -1588,6 +1590,14 @@ to DIAGNOSTICS and return the resulting list."
                                            "Enabled theindex requires a safe relative :path.")
                 diagnostics))
         (when (and (plist-member org-roam-blog-theindex
+                                 :title)
+                   (not (stringp (plist-get org-roam-blog-theindex
+                                            :title))))
+          (push (org-roam-blog--diagnostic 'error
+                                           subject
+                                           "The :title field must be a string.")
+                diagnostics))
+        (when (and (plist-member org-roam-blog-theindex
                                  :template)
                    (not (org-roam-blog--plist-p (plist-get org-roam-blog-theindex
                                                            :template))))
@@ -1751,9 +1761,11 @@ synchronize the Org-roam database."
                                      t
                                      "Required staging and file-promotion functions are unavailable.")
           (org-roam-blog--capability 'org-publish-index
-                                     (fboundp 'org-publish-collect-index)
+                                     (and (fboundp 'org-publish-collect-index)
+                                          (fboundp 'org-publish-cache-get))
                                      theindex-enabled
-                                     "Required function `org-publish-collect-index' is unavailable."))))
+                                     (concat "Required functions `org-publish-collect-index' and "
+                                             "`org-publish-cache-get' are unavailable.")))))
 
 (defun org-roam-blog--collect-diagnostics ()
   "Return variable and required-capability diagnostics."

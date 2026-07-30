@@ -346,6 +346,49 @@
                               (plist-get capability
                                          :detail))))))
 
+(ert-deftest org-roam-blog-test-theindex-validates-title ()
+  (let* ((org-roam-blog-theindex (list :enable t
+                                       :path "theindex.html"
+                                       :title 1))
+         (diagnostics (org-roam-blog--validate-theindex nil)))
+    (should (cl-find-if
+             (lambda (diagnostic)
+               (string-match-p ":title field must be a string"
+                               (plist-get diagnostic
+                                          :message)))
+             diagnostics))))
+
+(ert-deftest org-roam-blog-test-theindex-capabilities-are-conditional ()
+  (cl-letf (((symbol-function 'org-publish-collect-index) nil)
+            ((symbol-function 'org-publish-cache-get) nil))
+    (let* ((org-roam-blog-theindex (list :enable nil))
+           (capabilities (org-roam-blog--check-capabilities))
+           (capability (cl-find-if
+                        (lambda (candidate)
+                          (eq (plist-get candidate
+                                         :name)
+                              'org-publish-index))
+                        capabilities)))
+      (should capability)
+      (should-not (plist-get capability
+                             :required))
+      (should-not (plist-get capability
+                             :available)))
+    (let* ((org-roam-blog-theindex (list :enable t
+                                         :path "theindex.html"))
+           (capabilities (org-roam-blog--check-capabilities))
+           (capability (cl-find-if
+                        (lambda (candidate)
+                          (eq (plist-get candidate
+                                         :name)
+                              'org-publish-index))
+                        capabilities)))
+      (should capability)
+      (should (plist-get capability
+                         :required))
+      (should-not (plist-get capability
+                             :available)))))
+
 (ert-deftest org-roam-blog-test-published-property-is-configurable ()
   (let ((org-roam-blog-published-property "PDATE")
         (node (org-roam-node-create
