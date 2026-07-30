@@ -42,6 +42,7 @@
 (require 'cl-lib)
 (require 'json)
 (require 'org)
+(require 'org-id)
 (require 'ox)
 (require 'ox-html)
 (require 'ox-publish)
@@ -240,8 +241,18 @@ The supported schema is:
 
 When disabled, capabilities needed only for index collection are not
 required.  Index collection reuses `org-publish-collect-index' with
-an in-memory, dynamically bound Org Publish cache; it does not
-initialize or persist the user's Publish cache."
+an in-memory, dynamically bound Org Publish cache.  Generation reuses
+`org-publish-index-generate-theindex' and the standard HTML exporter.
+Only manifest entries whose content rule has non-nil `:theindex' are
+included.
+
+The generated Org source and include file are private staging
+artifacts.  The final HTML file is written at `:path'.  Links generated
+from real source paths are mapped to their corresponding publication
+store URLs by a local HTML link filter; fragments remain under Org's
+control.  TEMPLATE, BINDINGS, and BODY extend
+`org-roam-blog-export-default'.  No advice, symbolic links, persistent
+Publish cache, or global Publish project registration is used."
   :type 'plist
   :group 'org-roam-blog)
 
@@ -271,6 +282,19 @@ initialize or persist the user's Publish cache."
 (defvar org-roam-blog--body-functions
   nil
   "Body functions for the current Org-roam Blog export.")
+
+(defvar org-roam-blog--collect-theindex
+  nil
+  "Non-nil while content export should collect native index entries.")
+
+(defvar org-roam-blog--theindex-href-map
+  nil
+  "Alist mapping native theindex link targets to publication URLs.
+
+Keys are the unencoded href values observed by Org's HTML link-filter
+stage, without fragments.  Values are encoded publication-relative
+URLs.  This variable is dynamically bound only while exporting the
+generated theindex document.")
 
 (defun org-roam-blog--diagnostic (severity subject message)
   "Return a diagnostic with SEVERITY, SUBJECT, and MESSAGE.
@@ -526,6 +550,90 @@ state."
                      (list #'org-roam-blog--body-filter))
            org-export-filter-body-functions)))
     (org-export-to-file 'html output nil nil nil nil template)))
+
+(defun org-roam-blog--html-href-range (html)
+  "Return the value range of the first href attribute in HTML.
+
+HTML is one link fragment passed through
+`org-export-filter-link-functions'.  Return a cons of zero-based
+start and end positions, excluding quotes, or nil when no
+double-quoted or single-quoted href attribute is present.  The
+scanner preserves every byte outside the attribute value."
+  (let ((position (string-search "href"
+                                 html)))
+    (when position
+      (setq position (+ position
+                        4))
+      (while (and (< position
+                     (length html))
+                  (memq (aref html
+                              position)
+                        '(?\s ?\t ?\n ?\r)))
+        (setq position (1+ position)))
+      (when (and (< position
+                    (length html))
+                 (= (aref html
+                           position)
+                    ?=))
+        (setq position (1+ position))
+        (while (and (< position
+                       (length html))
+                    (memq (aref html
+                                position)
+                          '(?\s ?\t ?\n ?\r)))
+          (setq position (1+ position)))
+        (when (< position
+                 (length html))
+          (let ((quote (aref html
+                             position)))
+            (when (memq quote
+                        '(?\" ?\'))
+              (let* ((start (1+ position))
+                     (end (string-search (char-to-string quote)
+                                         html
+                                         start)))
+                (and end
+                     (cons start
+                           end))))))))))
+
+(defun org-roam-blog--theindex-link-filter (output backend _export-info)
+  "Map a native theindex link OUTPUT to its publication store URL.
+
+BACKEND and EXPORT-INFO follow
+`org-export-filter-link-functions'.  Only HTML-derived backends and
+exact href bases present in `org-roam-blog--theindex-href-map' are
+changed.  A fragment, when present, is copied unchanged.  Return
+OUTPUT unchanged for every other link."
+  (if (not (org-export-derived-backend-p backend
+                                         'html))
+      output
+    (let ((range (org-roam-blog--html-href-range output)))
+      (if (not range)
+          output
+        (let* ((href (substring output
+                                (car range)
+                                (cdr range)))
+               (fragment-position (string-search "#"
+                                                  href))
+               (base (if fragment-position
+                         (substring href
+                                    0
+                                    fragment-position)
+                       href))
+               (fragment (and fragment-position
+                              (substring href
+                                         fragment-position)))
+               (mapping (assoc-string base
+                                      org-roam-blog--theindex-href-map)))
+          (if (not mapping)
+              output
+            (concat (substring output
+                               0
+                               (car range))
+                    (cdr mapping)
+                    fragment
+                    (substring output
+                               (cdr range)))))))))
 
 (defun org-roam-blog--node-matches-tags-p (node tags)
   "Return non-nil when level-0 NODE contains all configured TAGS."
@@ -954,10 +1062,22 @@ unchanged; in particular, this package does not repair or reinterpret
       (org-roam-blog--call-with-export-bindings
        bindings
        (lambda ()
-         (org-roam-blog--export-to-file output
-                                        template
-                                        body
-                                        context))))
+         (let ((org-export-filter-final-output-functions
+                (if (and org-roam-blog--collect-theindex
+                         (plist-get entry
+                                    :theindex))
+                    (append org-export-filter-final-output-functions
+                            (list #'org-publish-collect-index))
+                  org-export-filter-final-output-functions)))
+           (org-roam-blog--export-to-file output
+                                          template
+                                          body
+                                          context)))))
+    (when (and org-roam-blog--collect-theindex
+               (plist-get entry
+                          :theindex))
+      (org-publish-update-timestamp (plist-get entry
+                                               :source-truename)))
     output))
 
 (defun org-roam-blog--stage-content (entries staging)
@@ -1212,6 +1332,132 @@ body filters run before the merged sitemap body functions."
       (cons relative
             output))))
 
+(defun org-roam-blog--theindex-entries (entries)
+  "Return manifest ENTRIES selected for the generated theindex."
+  (cl-remove-if-not (lambda (entry)
+                      (plist-get entry
+                                 :theindex))
+                    entries))
+
+(defun org-roam-blog--theindex-project (entries work-directory output-directory)
+  "Return a private Org Publish project for theindex ENTRIES.
+
+WORK-DIRECTORY contains the generated Org source and include file.
+OUTPUT-DIRECTORY is the directory containing the staged HTML result.
+Absolute `:include' paths restrict native Publish enumeration to the
+selected manifest files."
+  (list "org-roam-blog-theindex"
+        :base-directory work-directory
+        :base-extension "org"
+        :publishing-directory output-directory
+        :recursive nil
+        :exclude ".*"
+        :include (mapcar (lambda (entry)
+                           (plist-get entry
+                                      :source))
+                         entries)))
+
+(defun org-roam-blog--theindex-href-map (entries work-directory relative)
+  "Return native-to-store href mappings for ENTRIES.
+
+WORK-DIRECTORY is the virtual directory of generated theindex Org
+source.  RELATIVE is the final publication-relative theindex HTML
+path.  Mapping keys intentionally retain the unencoded representation
+seen by Org's HTML link-filter stage.  Mapping values are encoded URLs
+relative to RELATIVE."
+  (mapcar
+   (lambda (entry)
+     (let* ((source (plist-get entry
+                               :source))
+            (native-html (concat (file-name-sans-extension source)
+                                 ".html"))
+            (native-href (file-relative-name native-html
+                                             work-directory))
+            (store-href (org-roam-blog--relative-url relative
+                                                     (plist-get entry
+                                                                :store-relative))))
+       (cons native-href
+             store-href)))
+   entries))
+
+(defun org-roam-blog--theindex-source (work-directory config)
+  "Create and return the generated theindex Org file.
+
+WORK-DIRECTORY is private build state.  CONFIG is the validated
+`org-roam-blog-theindex' plist.  The source delegates index content
+to the native generator's `theindex.inc' file."
+  (let ((source (expand-file-name "theindex.org"
+                                  work-directory))
+        (title (or (plist-get config
+                              :title)
+                   "Index")))
+    (write-region (format "#+TITLE: %s\n\n#+INCLUDE: \"theindex.inc\"\n"
+                          title)
+                  nil
+                  source
+                  nil
+                  'silent)
+    source))
+
+(defun org-roam-blog--theindex-stage (entries staging work-directory project)
+  "Generate and stage the configured theindex.
+
+ENTRIES are the selected manifest entries whose index data have
+already been collected into the dynamically bound Publish cache.
+STAGING is the generated-output staging root.  WORK-DIRECTORY holds
+private native generator files, and PROJECT is its private Publish
+project.  Return a cons pairing the configured target-relative path
+with its staged HTML file, or nil when generation is disabled.
+
+Generation and export run under the effective theindex bindings.
+User link filters run before the package's exact href mapper.  Native
+body filters run before the merged theindex body functions."
+  (when (plist-get org-roam-blog-theindex
+                   :enable)
+    (let* ((relative (plist-get org-roam-blog-theindex
+                                :path))
+           (output (org-roam-blog--staging-output staging
+                                                  relative))
+           (output-directory (file-name-directory output))
+           (export-configuration
+            (org-roam-blog--export-configuration org-roam-blog-theindex))
+           (template (plist-get export-configuration
+                                :template))
+           (bindings (plist-get export-configuration
+                                :bindings))
+           (body (plist-get export-configuration
+                            :body))
+           (context (org-roam-blog--make-body-context 'theindex
+                                                      nil
+                                                      org-roam-blog-theindex))
+           (source (org-roam-blog--theindex-source work-directory
+                                                   org-roam-blog-theindex))
+           (org-roam-blog--theindex-href-map
+            (org-roam-blog--theindex-href-map entries
+                                              work-directory
+                                              relative)))
+      (make-directory output-directory
+                      t)
+      (org-roam-blog--call-with-export-bindings
+       bindings
+       (lambda ()
+         (org-publish-index-generate-theindex project
+                                              work-directory)
+         (with-temp-buffer
+           (insert-file-contents source)
+           (setq buffer-file-name source)
+           (setq default-directory work-directory)
+           (org-mode)
+           (let ((org-export-filter-link-functions
+                  (append org-export-filter-link-functions
+                          (list #'org-roam-blog--theindex-link-filter))))
+             (org-roam-blog--export-to-file output
+                                            template
+                                            body
+                                            context)))))
+      (cons relative
+            output))))
+
 (defun org-roam-blog--promotable-target-p (target)
   "Return non-nil when TARGET may be replaced by generated content.
 
@@ -1243,25 +1489,79 @@ symlink, or special file.  Return TARGET."
   "Stage all generated output for manifest ENTRIES.
 
 Return a result plist containing `:status', `:staging', staged
-`:content', `:sitemap', `:redirects', and `:diagnostics'.  Failure
-leaves the staging directory for inspection."
-  (when (plist-get org-roam-blog-theindex
-                   :enable)
-    (error "Theindex generation is not implemented"))
+`:content', `:sitemap', `:theindex', `:redirects', and
+`:diagnostics'.  Theindex collection shares one dynamically bound
+in-memory Publish cache with content export.  Failure leaves the
+staging directory, including private theindex work files, for
+inspection."
   (let ((staging (org-roam-blog--make-staging-directory))
-        staged-content staged-sitemap staged-redirects diagnostics)
+        staged-content staged-sitemap staged-theindex staged-redirects diagnostics)
     (condition-case error-data
-        (progn
+        (let* ((theindex-enabled (plist-get org-roam-blog-theindex
+                                            :enable))
+               (theindex-entries (and theindex-enabled
+                                      (org-roam-blog--theindex-entries entries)))
+               (work-root (and theindex-enabled
+                               (expand-file-name ".org-roam-blog-work"
+                                                 staging)))
+               (work-directory (and work-root
+                                    (expand-file-name "theindex"
+                                                      work-root)))
+               (timestamp-directory (and work-root
+                                         (expand-file-name "timestamps"
+                                                           work-root)))
+               (theindex-relative (and theindex-enabled
+                                       (plist-get org-roam-blog-theindex
+                                                  :path)))
+               (theindex-output-directory
+                (and theindex-enabled
+                     (file-name-directory
+                      (org-roam-blog--staging-output staging
+                                                    theindex-relative))))
+               (project (and theindex-enabled
+                             (org-roam-blog--theindex-project
+                              theindex-entries
+                              work-directory
+                              theindex-output-directory)))
+               (org-publish-cache (if theindex-enabled
+                                      (make-hash-table :test #'equal
+                                                       :weakness nil
+                                                       :size 30)
+                                    org-publish-cache))
+               (org-publish-timestamp-directory
+                (or timestamp-directory
+                    org-publish-timestamp-directory))
+               (org-id-locations (if (hash-table-p org-id-locations)
+                                     (copy-hash-table org-id-locations)
+                                   (copy-tree org-id-locations)))
+               (org-id-locations-file (if work-root
+                                          (expand-file-name "org-id-locations"
+                                                            work-root)
+                                        org-id-locations-file))
+               (org-roam-blog--collect-theindex theindex-enabled))
+          (when theindex-enabled
+            (make-directory work-directory
+                            t)
+            (org-publish-cache-set ":project:"
+                                   (car project))
+            (org-publish-cache-set ":cache-file:"
+                                   (expand-file-name "unused.cache"
+                                                     timestamp-directory)))
           (setq staged-content (org-roam-blog--stage-content entries
                                                              staging)
                 staged-sitemap (org-roam-blog--sitemap-stage entries
                                                              staging)
+                staged-theindex (org-roam-blog--theindex-stage theindex-entries
+                                                               staging
+                                                               work-directory
+                                                               project)
                 staged-redirects (org-roam-blog--stage-redirects entries
                                                                  staging))
           (list :status 'success
                 :staging staging
                 :content staged-content
                 :sitemap staged-sitemap
+                :theindex staged-theindex
                 :redirects staged-redirects
                 :diagnostics nil))
       (error (push (org-roam-blog--diagnostic 'error
@@ -1276,9 +1576,9 @@ leaves the staging directory for inspection."
   "Promote a successful STAGED generated-output result.
 
 Return a result plist with `:status', `:staging', `:promoted', and
-`:diagnostics'.  Content is promoted first, followed by sitemap and
-redirects.  Failure preserves the staging directory and reports
-targets already promoted."
+`:diagnostics'.  Content is promoted first, followed by sitemap,
+theindex, and redirects.  Failure preserves the staging directory
+and reports targets already promoted."
   (let ((staging (plist-get staged
                             :staging))
         promoted diagnostics)
@@ -1296,6 +1596,13 @@ targets already promoted."
                                           :sitemap)))
             (let ((target (org-roam-blog--output-path (car sitemap))))
               (org-roam-blog--promote-file (cdr sitemap)
+                                           target)
+              (push target
+                    promoted)))
+          (when-let* ((theindex (plist-get staged
+                                           :theindex)))
+            (let ((target (org-roam-blog--output-path (car theindex))))
+              (org-roam-blog--promote-file (cdr theindex)
                                            target)
               (push target
                     promoted)))
@@ -1762,10 +2069,18 @@ synchronize the Org-roam database."
                                      "Required staging and file-promotion functions are unavailable.")
           (org-roam-blog--capability 'org-publish-index
                                      (and (fboundp 'org-publish-collect-index)
-                                          (fboundp 'org-publish-cache-get))
+                                          (fboundp 'org-publish-index-generate-theindex)
+                                          (fboundp 'org-publish-cache-get)
+                                          (fboundp 'org-publish-cache-set)
+                                          (fboundp 'org-publish-update-timestamp)
+                                          (fboundp 'org-publish-get-base-files))
                                      theindex-enabled
-                                     (concat "Required functions `org-publish-collect-index' and "
-                                             "`org-publish-cache-get' are unavailable.")))))
+                                     (concat "One or more required native Org index APIs are "
+                                             "unavailable: `org-publish-collect-index', "
+                                             "`org-publish-index-generate-theindex', "
+                                             "`org-publish-cache-get', `org-publish-cache-set', "
+                                             "`org-publish-update-timestamp', or "
+                                             "`org-publish-get-base-files'.")))))
 
 (defun org-roam-blog--collect-diagnostics ()
   "Return variable and required-capability diagnostics."

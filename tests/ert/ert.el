@@ -389,6 +389,68 @@
       (should-not (plist-get capability
                              :available)))))
 
+(ert-deftest org-roam-blog-test-theindex-capabilities-require-native-generator ()
+  (cl-letf (((symbol-function 'org-publish-index-generate-theindex) nil))
+    (let* ((org-roam-blog-theindex (list :enable t
+                                         :path "theindex.html"))
+           (capabilities (org-roam-blog--check-capabilities))
+           (capability (cl-find-if
+                        (lambda (candidate)
+                          (eq (plist-get candidate
+                                         :name)
+                              'org-publish-index))
+                        capabilities)))
+      (should capability)
+      (should (plist-get capability
+                         :required))
+      (should-not (plist-get capability
+                             :available))
+      (should (string-match-p "org-publish-index-generate-theindex"
+                              (plist-get capability
+                                         :detail))))))
+
+(ert-deftest org-roam-blog-test-theindex-link-filter-maps-exact-html-href ()
+  (let ((org-roam-blog--theindex-href-map
+         (list (cons "../../../source/a b中.html"
+                     "../_store/id/a%20b%E4%B8%AD.html"))))
+    (should
+     (equal
+      (org-roam-blog--theindex-link-filter
+       "<a class=\"link\" href=\"../../../source/a b中.html#heading\">Entry</a>"
+       'html
+       nil)
+      "<a class=\"link\" href=\"../_store/id/a%20b%E4%B8%AD.html#heading\">Entry</a>"))
+    (should
+     (equal
+      (org-roam-blog--theindex-link-filter
+       "<a href=\"../../../source/a b中-extra.html#heading\">Other</a>"
+       'html
+       nil)
+      "<a href=\"../../../source/a b中-extra.html#heading\">Other</a>"))
+    (should
+     (equal
+      (org-roam-blog--theindex-link-filter
+       "<a href=\"../../../source/a b中.html#heading\">Entry</a>"
+       'org
+       nil)
+      "<a href=\"../../../source/a b中.html#heading\">Entry</a>"))))
+
+(ert-deftest org-roam-blog-test-theindex-project-includes-only-selected-sources ()
+  (let* ((entries (list (list :source "/source/a.org"
+                              :theindex t)
+                        (list :source "/source/b.org"
+                              :theindex nil)))
+         (selected (org-roam-blog--theindex-entries entries))
+         (project (org-roam-blog--theindex-project selected
+                                                   "/work/"
+                                                   "/output/")))
+    (should (equal (plist-get (cdr project)
+                              :include)
+                   (list "/source/a.org")))
+    (should (equal (plist-get (cdr project)
+                              :exclude)
+                   ".*"))))
+
 (ert-deftest org-roam-blog-test-published-property-is-configurable ()
   (let ((org-roam-blog-published-property "PDATE")
         (node (org-roam-node-create
@@ -1239,5 +1301,145 @@
                                          nil
                                          t)))))
       (delete-directory root t))))
+
+(ert-deftest org-roam-blog-test-theindex-native-generation-and-state-isolation ()
+  (let* ((root (make-temp-file "org-roam-blog-theindex-" t))
+         (source-root (expand-file-name "source"
+                                        root))
+         (source-a (expand-file-name "posts/a b中.org"
+                                     source-root))
+         (source-b (expand-file-name "posts/a b中-extra.org"
+                                     source-root))
+         (publish (expand-file-name "public"
+                                    root))
+         (temporary (expand-file-name "temporary"
+                                      root))
+         (theindex-output (expand-file-name "indices/theindex.html"
+                                            publish))
+         (outside-cache (make-hash-table :test #'equal))
+         (outside-id-locations (make-hash-table :test #'equal))
+         (outside-id-locations-file (expand-file-name "outside-id-locations"
+                                                       root))
+         (outside-link-filter (lambda (output _backend _info)
+                                output))
+         (org-publish-cache outside-cache)
+         (org-id-locations outside-id-locations)
+         (org-id-locations-file outside-id-locations-file)
+         (org-export-filter-link-functions (list outside-link-filter))
+         (org-roam-blog-publish-directory publish)
+         (org-roam-blog-temporary-directory temporary)
+         (org-roam-blog-export-default (list :template
+                                             (list :with-author nil)))
+         (org-roam-blog-sitemap (list :enable nil))
+         (theindex-context nil)
+         (org-roam-blog-theindex
+          (list :enable t
+                :path "indices/theindex.html"
+                :title "Native Index"
+                :body
+                (list (lambda (context)
+                        (setq theindex-context context)
+                        (plist-get context
+                                   :body)))))
+         (entry-a
+          (list :title "Selected"
+                :source source-a
+                :source-truename source-a
+                :source-relative "posts/a b中.org"
+                :store-relative "_store/uuid-a/a b中.html"
+                :store-output (expand-file-name "_store/uuid-a/a b中.html"
+                                                publish)
+                :theindex t
+                :template (list :with-author nil)))
+         (entry-b
+          (list :title "Excluded"
+                :source source-b
+                :source-truename source-b
+                :source-relative "posts/a b中-extra.org"
+                :store-relative "_store/uuid-b/a b中-extra.html"
+                :store-output (expand-file-name "_store/uuid-b/a b中-extra.html"
+                                                publish)
+                :theindex nil
+                :template (list :with-author nil))))
+    (unwind-protect
+        (progn
+          (make-directory (file-name-directory source-a)
+                          t)
+          (make-directory publish)
+          (make-directory temporary)
+          (write-region (concat "#+TITLE: Selected\n"
+                                "#+INDEX: File Entry\n\n"
+                                "* Custom Heading\n"
+                                ":PROPERTIES:\n"
+                                ":CUSTOM_ID: custom-heading\n"
+                                ":END:\n"
+                                "#+INDEX: Nested!Custom\n\n"
+                                "* Ordinary Heading\n"
+                                "#+INDEX: Nested!Ordinary\n")
+                        nil
+                        source-a
+                        nil
+                        'silent)
+          (write-region (concat "#+TITLE: Excluded\n"
+                                "#+INDEX: Must Not Appear\n")
+                        nil
+                        source-b
+                        nil
+                        'silent)
+          (let ((staged (org-roam-blog--stage-generated-batch
+                         (list entry-a
+                               entry-b))))
+            (ert-info ((format "Staging result: %S"
+                               staged))
+              (should (eq (plist-get staged
+                                     :status)
+                          'success)))
+            (should (eq org-publish-cache
+                        outside-cache))
+            (should (eq org-id-locations
+                        outside-id-locations))
+            (should (equal org-id-locations-file
+                           outside-id-locations-file))
+            (should (equal org-export-filter-link-functions
+                           (list outside-link-filter)))
+            (should (eq (plist-get theindex-context
+                                   :kind)
+                        'theindex))
+            (let ((staged-theindex (cdr (plist-get staged
+                                                   :theindex))))
+              (should (file-regular-p staged-theindex))
+              (with-temp-buffer
+                (insert-file-contents staged-theindex)
+                (ert-info ((buffer-string))
+                  (should (search-forward "<title>Native Index</title>"
+                                          nil
+                                          t))
+                  (should (search-forward "../_store/uuid-a/a%20b%E4%B8%AD.html"
+                                          nil
+                                          t))
+                  (should (search-forward "#custom-heading"
+                                          nil
+                                          t))
+                  (should (re-search-forward "#org[[:xdigit:]]+"
+                                             nil
+                                             t))
+                  (should-not (search-forward "Must Not Appear"
+                                              nil
+                                              t))
+                  (should-not (search-forward source-root
+                                              nil
+                                              t)))))
+            (let ((promoted (org-roam-blog--promote-generated-batch staged)))
+              (ert-info ((format "Promotion result: %S"
+                                 promoted))
+                (should (eq (plist-get promoted
+                                       :status)
+                            'success)))
+              (should (file-regular-p theindex-output))
+              (should (member theindex-output
+                              (plist-get promoted
+                                         :promoted))))))
+      (delete-directory root
+                        t))))
 
 ;;; org-roam-blog-test.el ends here
