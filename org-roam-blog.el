@@ -195,8 +195,7 @@ required."
   "Default regexp matching static file extensions.")
 
 (defconst org-roam-blog--sitemap-keys
-  '(:enable :path :title :sort :visible-tags :content-function
-    :template))
+  '(:enable :path :title :sort :visible-tags :content-function :template))
 
 (defconst org-roam-blog--theindex-keys
   '(:enable :path :title :template))
@@ -340,7 +339,8 @@ BASE.  Neither argument is modified."
 
 The function uses `org-roam-node-list' and does not synchronize the
 database or scan the source directory."
-  (let ((tags (plist-get rule :tags)))
+  (let ((tags (plist-get rule
+                         :tags)))
     (cl-remove-if-not
      (lambda (node)
        (org-roam-blog--node-matches-tags-p node tags))
@@ -353,60 +353,60 @@ Return a cons whose car is the entry and whose cdr is nil on success.
 On failure return a cons whose car is nil and whose cdr is a
 diagnostic."
   (let* ((source (expand-file-name (org-roam-node-file node)))
-         (source-root
-          (file-name-as-directory
-           (expand-file-name org-roam-blog-directory))))
+         (source-root (file-name-as-directory (expand-file-name org-roam-blog-directory))))
     (condition-case error-data
-        (if (not (org-roam-blog--path-inside-p source source-root))
+        (if (not (org-roam-blog--path-inside-p source
+                                               source-root))
             (cons nil
-                  (org-roam-blog--diagnostic
-                   'error (plist-get rule :name)
-                   (format "Source is outside the blog directory: %s"
-                           source)))
-          (let* ((source-relative (file-relative-name source source-root))
-                 (store-relative
-                  (org-roam-blog--replace-extension
-                   (concat
-                    (file-name-as-directory org-roam-blog-publish-store)
-                    source-relative)
-                   ".html"))
-                 (store-output
-                  (org-roam-blog--output-path store-relative))
-                 (directory (plist-get rule :directory))
-                 (redirect-relative
-                  (when directory
-                    (concat
-                     (unless (string= directory ".")
-                       (file-name-as-directory directory))
-                     (org-roam-blog--replace-extension
-                      (file-name-nondirectory source) ".html")))))
-            (cons
-             (list
-              :id (org-roam-node-id node)
-              :title (org-roam-node-title node)
-              :source source
-              :source-truename (file-truename source)
-              :source-relative source-relative
-              :store-output store-output
-              :store-relative store-relative
-              :store-url (org-roam-blog--encode-url-path store-relative)
-              :redirect-relative redirect-relative
-              :content-name (plist-get rule :name)
-              :tags (copy-sequence (org-roam-node-tags node))
-              :date nil
-              :sitemap (and (plist-get rule :sitemap) t)
-              :theindex (and (plist-get rule :theindex) t)
-              :template
-              (org-roam-blog--merge-template
-               org-roam-blog-default-template
-               (plist-get rule :template)))
-             nil)))
-      (file-error
-       (cons nil
-             (org-roam-blog--diagnostic
-              'error (plist-get rule :name)
-              (format "Cannot resolve source file %s: %s"
-                      source (error-message-string error-data))))))))
+                  (org-roam-blog--diagnostic 'error
+                                             (plist-get rule
+                                                        :name)
+                                             (format "Source is outside the blog directory: %s"
+                                                     source)))
+          (let* ((source-relative (file-relative-name source
+                                                      source-root))
+                 (store-relative (org-roam-blog--replace-extension (concat (file-name-as-directory org-roam-blog-publish-store)
+                                                                           source-relative)
+                                                                   ".html"))
+                 (store-output (org-roam-blog--output-path store-relative))
+                 (directory (plist-get rule
+                                       :directory))
+                 (redirect-relative (when directory
+                                      (concat (unless (string= directory
+                                                               ".")
+                                                (file-name-as-directory directory))
+                                              (org-roam-blog--replace-extension (file-name-nondirectory source)
+                                                                                ".html")))))
+            (cons (list :id (org-roam-node-id node)
+                        :title (org-roam-node-title node)
+                        :source source
+                        :source-truename (file-truename source)
+                        :source-relative source-relative
+                        :store-output store-output
+                        :store-relative store-relative
+                        :store-url (org-roam-blog--encode-url-path store-relative)
+                        :redirect-relative redirect-relative
+                        :content-name (plist-get rule
+                                                 :name)
+                        :tags (copy-sequence (org-roam-node-tags node))
+                        :date nil
+                        :sitemap (and (plist-get rule
+                                                :sitemap)
+                                      t)
+                        :theindex (and (plist-get rule
+                                                  :theindex)
+                                       t)
+                        :template (org-roam-blog--merge-template org-roam-blog-default-template
+                                                                 (plist-get rule
+                                                                            :template)))
+                  nil)))
+      (file-error (cons nil
+                        (org-roam-blog--diagnostic 'error
+                                                   (plist-get rule
+                                                              :name)
+                                                   (format "Cannot resolve source file %s: %s"
+                                                           source
+                                                           (error-message-string error-data))))))))
 
 (defun org-roam-blog--build-manifest ()
   "Build and return the current publication manifest.
@@ -423,28 +423,35 @@ reported as a warning."
         (pcase-let ((`(,entry . ,diagnostic)
                      (org-roam-blog--manifest-entry node rule)))
           (if diagnostic
-              (push diagnostic diagnostics)
-            (let* ((truename (plist-get entry :source-truename))
-                   (previous (gethash truename by-truename)))
-              (cond
-               ((null previous)
-                (puthash truename entry by-truename)
-                (push entry entries))
-               ((not (equal (plist-get previous :content-name)
-                            (plist-get entry :content-name)))
-                (push
-                 (org-roam-blog--diagnostic
-                  'error truename
-                  (format "File matches content rules %S and %S."
-                          (plist-get previous :content-name)
-                          (plist-get entry :content-name)))
-                 diagnostics))
-               (t
-                (push
-                 (org-roam-blog--diagnostic
-                  'warning truename
-                  "Multiple database nodes resolve to the same source file.")
-                 diagnostics))))))))
+              (push diagnostic
+                    diagnostics)
+            (let* ((truename (plist-get entry
+                                        :source-truename))
+                   (previous (gethash truename
+                                      by-truename)))
+              (cond ((null previous)
+                     (puthash truename
+                              entry
+                              by-truename)
+                     (push entry
+                           entries))
+                    ((not (equal (plist-get previous
+                                            :content-name)
+                                 (plist-get entry
+                                            :content-name)))
+                     (push (org-roam-blog--diagnostic 'error
+                                                      truename
+                                                      (format "File matches content rules %S and %S."
+                                                              (plist-get previous
+                                                                         :content-name)
+                                                              (plist-get entry
+                                                                         :content-name)))
+                           diagnostics))
+                    (t
+                     (push (org-roam-blog--diagnostic 'warning
+                                                      truename
+                                                      "Multiple database nodes resolve to the same source file.")
+                           diagnostics))))))))
     (list :entries (nreverse entries)
           :diagnostics (nreverse diagnostics))))
 
@@ -462,50 +469,58 @@ The plan includes content store files, redirects, and enabled sitemap
 and theindex targets."
   (let (items)
     (dolist (entry entries)
-      (push
-       (org-roam-blog--plan-item
-        'content (plist-get entry :source)
-        (plist-get entry :store-output)
-        (plist-get entry :content-name))
-       items)
-      (when-let* ((redirect (plist-get entry :redirect-relative)))
+      (push (org-roam-blog--plan-item 'content
+                                      (plist-get entry
+                                                 :source)
+                                      (plist-get entry
+                                                 :store-output)
+                                      (plist-get entry
+                                                 :content-name))
+            items)
+      (when-let* ((redirect (plist-get entry
+                                       :redirect-relative)))
         (push
-         (org-roam-blog--plan-item
-          'redirect (plist-get entry :source)
-          (org-roam-blog--output-path redirect)
-          (plist-get entry :content-name))
+         (org-roam-blog--plan-item 'redirect
+                                   (plist-get entry
+                                              :source)
+                                   (org-roam-blog--output-path redirect)
+                                   (plist-get entry
+                                              :content-name))
          items)))
-    (when (plist-get org-roam-blog-sitemap :enable)
-      (push
-       (org-roam-blog--plan-item
-        'sitemap 'manifest
-        (org-roam-blog--output-path
-         (plist-get org-roam-blog-sitemap :path))
-        'org-roam-blog-sitemap)
-       items))
-    (when (plist-get org-roam-blog-theindex :enable)
-      (push
-       (org-roam-blog--plan-item
-        'theindex 'manifest
-        (org-roam-blog--output-path
-         (plist-get org-roam-blog-theindex :path))
-        'org-roam-blog-theindex)
-       items))
+    (when (plist-get org-roam-blog-sitemap
+                     :enable)
+      (push (org-roam-blog--plan-item 'sitemap
+                                      'manifest
+                                      (org-roam-blog--output-path (plist-get org-roam-blog-sitemap
+                                                                             :path))
+                                      'org-roam-blog-sitemap)
+            items))
+    (when (plist-get org-roam-blog-theindex
+                     :enable)
+      (push (org-roam-blog--plan-item 'theindex
+                                      'manifest
+                                      (org-roam-blog--output-path (plist-get org-roam-blog-theindex
+                                                                             :path))
+                                      'org-roam-blog-theindex)
+            items))
     (nreverse items)))
 
 (defun org-roam-blog--static-extension-regexp (mapping)
   "Return the complete file regexp for static MAPPING."
-  (format
-   "\\.\\(?:%s\\)\\'"
-   (or (plist-get mapping :extensions)
-       org-roam-blog--default-static-extensions)))
+  (format "\\.\\(?:%s\\)\\'"
+          (or (plist-get mapping
+                         :extensions)
+              org-roam-blog--default-static-extensions)))
 
 (defun org-roam-blog--static-target-relative (mapping source-relative)
   "Return publication-relative target for MAPPING and SOURCE-RELATIVE."
-  (let ((directory (plist-get mapping :directory)))
-    (if (equal directory ".")
+  (let ((directory (plist-get mapping
+                              :directory)))
+    (if (equal directory
+               ".")
         source-relative
-      (concat (file-name-as-directory directory) source-relative))))
+      (concat (file-name-as-directory directory)
+              source-relative))))
 
 (defun org-roam-blog--static-files ()
   "Return static file records selected by `org-roam-blog-static'.
@@ -516,46 +531,49 @@ recursive and does not follow symlinked directories.  A selected file
 whose true path escapes its configured source directory signals an
 error."
   (let (records)
-    (cl-loop
-     for mapping in org-roam-blog-static
-     for index from 0
-     for owner = (format "org-roam-blog-static[%d]" index)
-     for base = (file-name-as-directory
-                 (expand-file-name (plist-get mapping :source)))
-     for regexp = (org-roam-blog--static-extension-regexp mapping)
-     do
-     (unless (file-directory-p base)
-       (error "Static source directory does not exist: %s" base))
-     (dolist (source
-              (directory-files-recursively base regexp nil nil nil))
-       (unless (and (file-regular-p source)
-                    (org-roam-blog--path-inside-p
-                     (file-truename source) (file-truename base)))
-         (error "Static source escapes its configured directory: %s"
-                source))
-       (let* ((source-relative (file-relative-name source base))
-              (target-relative
-               (org-roam-blog--static-target-relative
-                mapping source-relative)))
-         (push
-          (list :source source
-                :source-relative source-relative
-                :target (org-roam-blog--output-path target-relative)
-                :target-relative target-relative
-                :mapping mapping
-                :owner owner)
-          records)))
-     finally return (nreverse records))))
+    (cl-loop for mapping in org-roam-blog-static
+             for index from 0
+             for owner = (format "org-roam-blog-static[%d]"
+                                 index)
+             for base = (file-name-as-directory (expand-file-name (plist-get mapping
+                                                                             :source)))
+             for regexp = (org-roam-blog--static-extension-regexp mapping)
+             do
+             (unless (file-directory-p base)
+               (error "Static source directory does not exist: %s" base))
+             (dolist (source (directory-files-recursively base
+                                                          regexp
+                                                          nil
+                                                          nil
+                                                          nil))
+               (unless (and (file-regular-p source)
+                            (org-roam-blog--path-inside-p (file-truename source)
+                                                          (file-truename base)))
+                 (error "Static source escapes its configured directory: %s"
+                        source))
+               (let* ((source-relative (file-relative-name source base))
+                      (target-relative (org-roam-blog--static-target-relative mapping
+                                                                              source-relative)))
+                 (push (list :source source
+                             :source-relative source-relative
+                             :target (org-roam-blog--output-path target-relative)
+                             :target-relative target-relative
+                             :mapping mapping
+                             :owner owner)
+                       records)))
+             finally return (nreverse records))))
 
 (defun org-roam-blog--static-output-plan (records)
   "Return output plan items for static file RECORDS."
-  (mapcar
-   (lambda (record)
-     (org-roam-blog--plan-item
-      'static (plist-get record :source)
-      (plist-get record :target)
-      (plist-get record :owner)))
-   records))
+  (mapcar (lambda (record)
+            (org-roam-blog--plan-item 'static
+                                      (plist-get record
+                                                 :source)
+                                      (plist-get record
+                                                 :target)
+                                      (plist-get record
+                                                 :owner)))
+          records))
 
 (defun org-roam-blog--publish-static (records)
   "Publish static file RECORDS directly to their final targets.
@@ -565,26 +583,29 @@ tree below each mapping.  Return the final target paths in publication
 order.  This function does not modify `org-publish-project-alist'."
   (let (published)
     (dolist (record records)
-      (push (org-roam-blog--publish-static-record record) published))
+      (push (org-roam-blog--publish-static-record record)
+            published))
     (nreverse published)))
 
 (defun org-roam-blog--publish-static-record (record)
   "Publish one static RECORD and return its final target."
-  (let* ((source (plist-get record :source))
-         (target (plist-get record :target))
-         (mapping (plist-get record :mapping))
-         (project
-          (list :base-directory
-                (file-name-as-directory
-                 (expand-file-name (plist-get mapping :source)))
-                :publishing-directory
-                (file-name-directory target))))
+  (let* ((source (plist-get record
+                            :source))
+         (target (plist-get record
+                            :target))
+         (mapping (plist-get record
+                             :mapping))
+         (project (list :base-directory (file-name-as-directory (expand-file-name (plist-get mapping
+                                                                                             :source)))
+                        :publishing-directory (file-name-directory target))))
     (unless (org-roam-blog--promotable-target-p target)
       (error "Refusing to replace non-regular static target: %s"
              target))
-    (make-directory (file-name-directory target) t)
-    (org-publish-attachment
-     project source (file-name-directory target))
+    (make-directory (file-name-directory target)
+                    t)
+    (org-publish-attachment project
+                            source
+                            (file-name-directory target))
     target))
 
 (defun org-roam-blog--publish-static-batch (records)
@@ -594,39 +615,41 @@ The result contains `:status', `:published', and `:diagnostics'.  On
 failure, `:published' lists the targets copied before the error."
   (let (published diagnostics)
     (condition-case error-data
-        (progn
-          (dolist (record records)
-            (push (org-roam-blog--publish-static-record record)
-                  published))
-          (list :status 'success
-                :published (nreverse published)
-                :diagnostics nil))
-      (error
-       (push
-        (org-roam-blog--diagnostic
-         'error 'static (error-message-string error-data))
-        diagnostics)
-       (list :status 'failure
-             :published (nreverse published)
-             :diagnostics (nreverse diagnostics))))))
+        (progn (dolist (record records)
+                 (push (org-roam-blog--publish-static-record record)
+                       published))
+               (list :status 'success
+                     :published (nreverse published)
+                     :diagnostics nil))
+      (error (push (org-roam-blog--diagnostic 'error
+                                              'static
+                                              (error-message-string error-data))
+                   diagnostics)
+             (list :status 'failure
+                   :published (nreverse published)
+                   :diagnostics (nreverse diagnostics))))))
 
 (defun org-roam-blog--output-conflicts (items)
   "Return diagnostics for exact target collisions in plan ITEMS."
   (let ((targets (make-hash-table :test #'equal))
         diagnostics)
     (dolist (item items)
-      (let* ((target (expand-file-name (plist-get item :target)))
+      (let* ((target (expand-file-name (plist-get item
+                                                  :target)))
              (previous (gethash target targets)))
         (if previous
-            (push
-             (org-roam-blog--diagnostic
-              'error target
-              (format "Output conflict between %S (%S) and %S (%S)."
-                      (plist-get previous :kind)
-                      (plist-get previous :owner)
-                      (plist-get item :kind)
-                      (plist-get item :owner)))
-             diagnostics)
+            (push (org-roam-blog--diagnostic 'error
+                                             target
+                                             (format "Output conflict between %S (%S) and %S (%S)."
+                                                     (plist-get previous
+                                                                :kind)
+                                                     (plist-get previous
+                                                                :owner)
+                                                     (plist-get item
+                                                                :kind)
+                                                     (plist-get item
+                                                                :owner)))
+                  diagnostics)
           (puthash target item targets))))
     (nreverse diagnostics)))
 
@@ -634,19 +657,18 @@ failure, `:published' lists the targets copied before the error."
   "Return diagnostics for unsafe or non-promotable plan ITEMS."
   (let (diagnostics)
     (dolist (item items)
-      (let ((target (plist-get item :target)))
-        (unless (file-in-directory-p
-                 target org-roam-blog-publish-directory)
-          (push
-           (org-roam-blog--diagnostic
-            'error target "Output target escapes the publication directory.")
-           diagnostics))
+      (let ((target (plist-get item
+                               :target)))
+        (unless (file-in-directory-p target org-roam-blog-publish-directory)
+          (push (org-roam-blog--diagnostic 'error
+                                           target
+                                           "Output target escapes the publication directory.")
+                diagnostics))
         (unless (org-roam-blog--promotable-target-p target)
-          (push
-           (org-roam-blog--diagnostic
-            'error target
-            "Existing output target is a directory, symlink, or special file.")
-           diagnostics))))
+          (push (org-roam-blog--diagnostic 'error
+                                           target
+                                           "Existing output target is a directory, symlink, or special file.")
+                diagnostics))))
     (nreverse diagnostics)))
 
 (defun org-roam-blog--make-staging-directory ()
@@ -658,17 +680,16 @@ contains a timestamp followed by the unique suffix generated by
 `make-temp-file'."
   (let* ((parent (or org-roam-blog-temporary-directory
                      temporary-file-directory))
-         (temporary-file-directory
-          (file-name-as-directory (expand-file-name parent)))
-         (prefix
-          (format "org-roam-blog-%s-"
-                  (format-time-string "%Y%m%dT%H%M%S"))))
+         (temporary-file-directory (file-name-as-directory (expand-file-name parent)))
+         (prefix (format "org-roam-blog-%s-"
+                         (format-time-string "%Y%m%dT%H%M%S"))))
     (make-temp-file prefix t)))
 
 (defun org-roam-blog--staging-output (staging relative-path)
   "Return the output path below STAGING for RELATIVE-PATH."
   (unless (org-roam-blog--relative-file-p relative-path)
-    (error "Unsafe staging output path: %S" relative-path))
+    (error "Unsafe staging output path: %S"
+           relative-path))
   (expand-file-name relative-path
                     (file-name-as-directory staging)))
 
@@ -680,18 +701,22 @@ changes in an existing visiting buffer are ignored.  Standard Org
 export hooks and filters remain active.  Links are passed to Org
 unchanged; in particular, this package does not repair or reinterpret
 `id:' links or their HTML anchors.  Return the staged output file."
-  (let* ((source (plist-get entry :source))
-         (relative (plist-get entry :store-relative))
-         (output (org-roam-blog--staging-output staging relative))
-         (template (plist-get entry :template)))
-    (make-directory (file-name-directory output) t)
+  (let* ((source (plist-get entry
+                            :source))
+         (relative (plist-get entry
+                              :store-relative))
+         (output (org-roam-blog--staging-output staging
+                                                relative))
+         (template (plist-get entry
+                              :template)))
+    (make-directory (file-name-directory output)
+                    t)
     (with-temp-buffer
       (insert-file-contents source)
-      (setq buffer-file-name source
-            default-directory (file-name-directory source))
+      (setq buffer-file-name source)
+      (setq default-directory (file-name-directory source))
       (org-mode)
-      (org-export-to-file
-       'html output nil nil nil nil template))
+      (org-export-to-file 'html output nil nil nil nil template))
     output))
 
 (defun org-roam-blog--stage-content (entries staging)
@@ -699,44 +724,49 @@ unchanged; in particular, this package does not repair or reinterpret
 
 Return a list of cons cells pairing each entry with its staged output.
 Signal the original export error on failure."
-  (mapcar
-   (lambda (entry)
-     (cons entry
-           (org-roam-blog--export-content-entry entry staging)))
-   entries))
+  (mapcar (lambda (entry)
+            (cons entry
+                  (org-roam-blog--export-content-entry entry staging)))
+          entries))
 
 (defun org-roam-blog--html-attribute-escape (value)
   "Escape VALUE for a double-quoted HTML attribute."
   (let ((escaped (org-html-encode-plain-text value)))
-    (setq escaped
-          (replace-regexp-in-string "\"" "&quot;" escaped t t))
-    (replace-regexp-in-string "'" "&#39;" escaped t t)))
+    (setq escaped (replace-regexp-in-string "\""
+                                            "&quot;"
+                                            escaped
+                                            t
+                                            t))
+    (replace-regexp-in-string "'"
+                              "&#39;"
+                              escaped
+                              t
+                              t)))
 
 (defun org-roam-blog--redirect-html (entry)
   "Return a static HTML redirect document for manifest ENTRY."
-  (let* ((redirect (plist-get entry :redirect-relative))
-         (store (plist-get entry :store-relative))
-         (target (org-roam-blog--relative-url redirect store))
-         (attribute-target
-          (org-roam-blog--html-attribute-escape target))
-         (title
-          (org-roam-blog--html-attribute-escape
-           (or (plist-get entry :title) "Redirect")))
+  (let* ((redirect (plist-get entry
+                              :redirect-relative))
+         (store (plist-get entry
+                           :store-relative))
+         (target (org-roam-blog--relative-url redirect
+                                              store))
+         (attribute-target (org-roam-blog--html-attribute-escape target))
+         (title (org-roam-blog--html-attribute-escape (or (plist-get entry
+                                                                     :title)
+                                                          "Redirect")))
          (javascript-target (json-serialize target)))
-    (concat
-     "<!doctype html>\n"
-     "<html lang=\"en\">\n"
-     "<head>\n"
-     "<meta charset=\"utf-8\">\n"
-     "<meta http-equiv=\"refresh\" content=\"0; url="
-     attribute-target "\">\n"
-     "<link rel=\"canonical\" href=\"" attribute-target "\">\n"
-     "<title>" title "</title>\n"
-     "<script>location.replace(" javascript-target ");</script>\n"
-     "</head>\n"
-     "<body><p><a href=\"" attribute-target "\">"
-     title "</a></p></body>\n"
-     "</html>\n")))
+    (concat "<!doctype html>\n"
+            "<html lang=\"en\">\n"
+            "<head>\n"
+            "<meta charset=\"utf-8\">\n"
+            "<meta http-equiv=\"refresh\" content=\"0; url=" attribute-target "\">\n"
+            "<link rel=\"canonical\" href=\"" attribute-target "\">\n"
+            "<title>" title "</title>\n"
+            "<script>location.replace(" javascript-target ");</script>\n"
+            "</head>\n"
+            "<body><p><a href=\"" attribute-target "\">" title "</a></p></body>\n"
+            "</html>\n")))
 
 (defun org-roam-blog--stage-redirects (entries staging)
   "Generate redirects for manifest ENTRIES below STAGING.
@@ -745,96 +775,117 @@ Return a list of cons cells pairing each entry with its staged
 redirect file."
   (let (staged)
     (dolist (entry entries)
-      (when-let* ((relative (plist-get entry :redirect-relative)))
-        (let ((output
-               (org-roam-blog--staging-output staging relative)))
-          (make-directory (file-name-directory output) t)
+      (when-let* ((relative (plist-get entry
+                                       :redirect-relative)))
+        (let ((output (org-roam-blog--staging-output staging
+                                                     relative)))
+          (make-directory (file-name-directory output)
+                          t)
           (write-region (org-roam-blog--redirect-html entry)
-                        nil output nil 'silent)
-          (push (cons entry output) staged))))
+                        nil
+                        output
+                        nil
+                        'silent)
+          (push (cons entry
+                      output)
+                staged))))
     (nreverse staged)))
 
 (defun org-roam-blog--project-sitemap-tags (tags config)
   "Return members of TAGS listed by sitemap CONFIG as visible."
-  (let ((visible (plist-get config :visible-tags)))
-    (cl-remove-if-not
-     (lambda (tag) (member tag visible))
-     tags)))
+  (let ((visible (plist-get config
+                            :visible-tags)))
+    (cl-remove-if-not (lambda (tag)
+                        (member tag
+                                visible))
+                      tags)))
 
 (defun org-roam-blog--sitemap-entry-time (entry)
   "Return a sortable time value from sitemap ENTRY, or nil."
-  (let ((date (plist-get entry :date)))
-    (cond
-     ((null date) nil)
-     ((stringp date)
-      (condition-case nil
-          (org-time-string-to-time date)
-        (error nil)))
-     ((listp date) date)
-     (t nil))))
+  (let ((date (plist-get entry
+                         :date)))
+    (cond ((null date)
+           nil)
+          ((stringp date)
+           (condition-case nil
+               (org-time-string-to-time date)
+             (error nil)))
+          ((listp date) date)
+          (t
+           nil))))
 
 (defun org-roam-blog--prepare-sitemap-entries (entries config)
   "Filter and prepare manifest ENTRIES according to sitemap CONFIG."
-  (let ((prepared
-         (mapcar
-          (lambda (entry)
-            (let ((copy (copy-sequence entry)))
-              (plist-put
-               copy :tags
-               (org-roam-blog--project-sitemap-tags
-                (plist-get copy :tags) config))))
-          (cl-remove-if-not
-           (lambda (entry) (plist-get entry :sitemap))
-           entries))))
-    (if (eq (plist-get config :sort) 'anti-chronologically)
-        (cl-stable-sort
-         prepared
-         (lambda (left right)
-           (let ((left-time
-                  (org-roam-blog--sitemap-entry-time left))
-                 (right-time
-                  (org-roam-blog--sitemap-entry-time right)))
-             (cond
-              ((and left-time right-time)
-               (time-less-p right-time left-time))
-              (left-time t)
-              (t nil)))))
+  (let ((prepared (mapcar (lambda (entry)
+                            (let ((copy (copy-sequence entry)))
+                              (plist-put copy
+                                         :tags
+                                         (org-roam-blog--project-sitemap-tags (plist-get copy
+                                                                                         :tags)
+                                                                              config))))
+                          (cl-remove-if-not (lambda (entry)
+                                              (plist-get entry
+                                                         :sitemap))
+                                            entries))))
+    (if (eq (plist-get config
+                       :sort)
+            'anti-chronologically)
+        (cl-stable-sort prepared
+                        (lambda (left right)
+                          (let ((left-time (org-roam-blog--sitemap-entry-time left))
+                                (right-time (org-roam-blog--sitemap-entry-time right)))
+                            (cond ((and left-time right-time)
+                                   (time-less-p right-time left-time))
+                                  (left-time t)
+                                  (t nil)))))
       prepared)))
 
 (defun org-roam-blog--org-link-description (value)
   "Escape VALUE for use as an Org link description."
-  (replace-regexp-in-string
-   "]" "\\\\]" (replace-regexp-in-string
-                 "[\n\r]+" " " (or value "") t t)
-   t t))
+  (replace-regexp-in-string "]"
+                            "\\\\]"
+                            (replace-regexp-in-string "[\n\r]+"
+                                                      " "
+                                                      (or value "")
+                                                      t
+                                                      t)
+                            t
+                            t))
 
 (defun org-roam-blog--default-sitemap-content (entries config)
   "Return default Org sitemap content for ENTRIES and CONFIG."
-  (let ((path (plist-get config :path))
-        (title (or (plist-get config :title) "Sitemap")))
-    (concat
-     "#+TITLE: " (replace-regexp-in-string "[\n\r]+" " " title t t)
-     "\n\n"
-     (mapconcat
-      (lambda (entry)
-        (let* ((url
-                (org-roam-blog--relative-url
-                 path (plist-get entry :store-relative)))
-               (description
-                (org-roam-blog--org-link-description
-                 (or (plist-get entry :title)
-                     (plist-get entry :source-relative))))
-               (tags (plist-get entry :tags)))
-          (concat "- [[file:" url "][" description "]]"
-                  (when tags
-                    (concat
-                     " ("
-                     (mapconcat
-                      #'org-roam-blog--org-link-description
-                      tags ", ")
-                     ")")))))
-      entries "\n")
-     (when entries "\n"))))
+  (let ((path (plist-get config
+                         :path))
+        (title (or (plist-get config
+                              :title)
+                   "Sitemap")))
+    (concat "#+TITLE: "
+            (replace-regexp-in-string "[\n\r]+"
+                                      " "
+                                      title
+                                      t
+                                      t)
+            "\n\n"
+            (mapconcat (lambda (entry)
+                         (let* ((url (org-roam-blog--relative-url path
+                                                                  (plist-get entry
+                                                                             :store-relative)))
+                                (description (org-roam-blog--org-link-description (or (plist-get entry
+                                                                                                 :title)
+                                                                                      (plist-get entry
+                                                                                                 :source-relative))))
+                                (tags (plist-get entry
+                                                 :tags)))
+                           (concat "- [[file:" url "][" description "]]"
+                                   (when tags
+                                     (concat " ("
+                                             (mapconcat #'org-roam-blog--org-link-description
+                                                        tags
+                                                        ", ")
+                                             ")")))))
+                       entries
+                       "\n")
+            (when entries "\n"))))
 
 (defun org-roam-blog--sitemap-content (entries)
   "Return Org sitemap source for manifest ENTRIES.
@@ -844,12 +895,14 @@ CONFIG), where ENTRIES have already been filtered, sorted, and had
 their displayed tags projected.  It must return an Org source
 string."
   (let* ((config org-roam-blog-sitemap)
-         (prepared
-          (org-roam-blog--prepare-sitemap-entries entries config))
-         (function
-          (or (plist-get config :content-function)
-              #'org-roam-blog--default-sitemap-content))
-         (content (funcall function prepared config)))
+         (prepared (org-roam-blog--prepare-sitemap-entries entries
+                                                           config))
+         (function (or (plist-get config
+                                  :content-function)
+                       #'org-roam-blog--default-sitemap-content))
+         (content (funcall function
+                           prepared
+                           config)))
     (unless (stringp content)
       (error "Sitemap content function must return a string"))
     content))
@@ -859,27 +912,29 @@ string."
 
 Return a cons pairing the sitemap target-relative path with its staged
 file, or nil when sitemap generation is disabled."
-  (when (plist-get org-roam-blog-sitemap :enable)
-    (let* ((relative (plist-get org-roam-blog-sitemap :path))
-           (output
-            (org-roam-blog--staging-output staging relative))
-           (template
-            (org-roam-blog--merge-template
-             org-roam-blog-default-template
-             (plist-get org-roam-blog-sitemap :template))))
-      (make-directory (file-name-directory output) t)
+  (when (plist-get org-roam-blog-sitemap
+                   :enable)
+    (let* ((relative (plist-get org-roam-blog-sitemap
+                                :path))
+           (output (org-roam-blog--staging-output staging
+                                                  relative))
+           (template (org-roam-blog--merge-template org-roam-blog-default-template
+                                                    (plist-get org-roam-blog-sitemap
+                                                               :template))))
+      (make-directory (file-name-directory output)
+                      t)
       (with-temp-buffer
         (insert (org-roam-blog--sitemap-content entries))
         (org-mode)
         ;; `org-mode' establishes buffer-local path state.  Set the
         ;; virtual source location afterwards so relative links are
         ;; checked from the staged sitemap's directory.
-        (setq buffer-file-name
-              (org-roam-blog--replace-extension output ".org")
-              default-directory (file-name-directory output))
-        (org-export-to-file
-         'html output nil nil nil nil template))
-      (cons relative output))))
+        (setq buffer-file-name (org-roam-blog--replace-extension output
+                                                                 ".org"))
+        (setq default-directory (file-name-directory output))
+        (org-export-to-file 'html output nil nil nil nil template))
+      (cons relative
+            output))))
 
 (defun org-roam-blog--promotable-target-p (target)
   "Return non-nil when TARGET may be replaced by generated content.
@@ -898,8 +953,14 @@ symlink, or special file.  Return TARGET."
   (unless (org-roam-blog--promotable-target-p target)
     (error "Refusing to replace non-regular publication target: %s"
            target))
-  (make-directory (file-name-directory target) t)
-  (copy-file staged target t t nil t)
+  (make-directory (file-name-directory target)
+                  t)
+  (copy-file staged
+             target
+             t
+             t
+             nil
+             t)
   target)
 
 (defun org-roam-blog--stage-generated-batch (entries)
@@ -908,33 +969,32 @@ symlink, or special file.  Return TARGET."
 Return a result plist containing `:status', `:staging', staged
 `:content', `:sitemap', `:redirects', and `:diagnostics'.  Failure
 leaves the staging directory for inspection."
-  (when (plist-get org-roam-blog-theindex :enable)
+  (when (plist-get org-roam-blog-theindex
+                   :enable)
     (error "Theindex generation is not implemented"))
   (let ((staging (org-roam-blog--make-staging-directory))
         staged-content staged-sitemap staged-redirects diagnostics)
     (condition-case error-data
         (progn
-          (setq staged-content
-                (org-roam-blog--stage-content entries staging)
-                staged-sitemap
-                (org-roam-blog--stage-sitemap entries staging)
-                staged-redirects
-                (org-roam-blog--stage-redirects entries staging))
+          (setq staged-content (org-roam-blog--stage-content entries
+                                                             staging)
+                staged-sitemap (org-roam-blog--stage-sitemap entries
+                                                             staging)
+                staged-redirects (org-roam-blog--stage-redirects entries
+                                                                 staging))
           (list :status 'success
                 :staging staging
                 :content staged-content
                 :sitemap staged-sitemap
                 :redirects staged-redirects
                 :diagnostics nil))
-      (error
-       (push
-        (org-roam-blog--diagnostic
-         'error 'content
-         (error-message-string error-data))
-        diagnostics)
-       (list :status 'failure
-             :staging staging
-             :diagnostics (nreverse diagnostics))))))
+      (error (push (org-roam-blog--diagnostic 'error
+                                              'content
+                                              (error-message-string error-data))
+                   diagnostics)
+             (list :status 'failure
+                   :staging staging
+                   :diagnostics (nreverse diagnostics))))))
 
 (defun org-roam-blog--promote-generated-batch (staged)
   "Promote a successful STAGED generated-output result.
@@ -943,39 +1003,48 @@ Return a result plist with `:status', `:staging', `:promoted', and
 `:diagnostics'.  Content is promoted first, followed by sitemap and
 redirects.  Failure preserves the staging directory and reports
 targets already promoted."
-  (let ((staging (plist-get staged :staging))
+  (let ((staging (plist-get staged
+                            :staging))
         promoted diagnostics)
     (condition-case error-data
         (progn
-          (dolist (pair (plist-get staged :content))
-            (let ((target (plist-get (car pair) :store-output)))
-              (org-roam-blog--promote-file (cdr pair) target)
-              (push target promoted)))
-          (when-let* ((sitemap (plist-get staged :sitemap)))
-            (let ((target
-                   (org-roam-blog--output-path (car sitemap))))
-              (org-roam-blog--promote-file (cdr sitemap) target)
-              (push target promoted)))
-          (dolist (pair (plist-get staged :redirects))
-            (let ((target
-                   (org-roam-blog--output-path
-                    (plist-get (car pair) :redirect-relative))))
-              (org-roam-blog--promote-file (cdr pair) target)
-              (push target promoted)))
-          (delete-directory staging t)
+          (dolist (pair (plist-get staged
+                                   :content))
+            (let ((target (plist-get (car pair)
+                                     :store-output)))
+              (org-roam-blog--promote-file (cdr pair)
+                                           target)
+              (push target
+                    promoted)))
+          (when-let* ((sitemap (plist-get staged
+                                          :sitemap)))
+            (let ((target (org-roam-blog--output-path (car sitemap))))
+              (org-roam-blog--promote-file (cdr sitemap)
+                                           target)
+              (push target
+                    promoted)))
+          (dolist (pair (plist-get staged
+                                   :redirects))
+            (let ((target (org-roam-blog--output-path (plist-get (car pair)
+                                                                 :redirect-relative))))
+              (org-roam-blog--promote-file (cdr pair)
+                                           target)
+              (push target
+                    promoted)))
+          (delete-directory staging
+                            t)
           (list :status 'success
                 :staging nil
                 :promoted (nreverse promoted)
                 :diagnostics nil))
-      (error
-       (push
-        (org-roam-blog--diagnostic
-         'error 'promotion (error-message-string error-data))
-        diagnostics)
-       (list :status 'failure
-             :staging staging
-             :promoted (nreverse promoted)
-             :diagnostics (nreverse diagnostics))))))
+      (error (push (org-roam-blog--diagnostic 'error
+                                              'promotion
+                                              (error-message-string error-data))
+                   diagnostics)
+             (list :status 'failure
+                   :staging staging
+                   :promoted (nreverse promoted)
+                   :diagnostics (nreverse diagnostics))))))
 
 (defun org-roam-blog--publish-generated-batch (entries)
   "Stage and promote all generated output for manifest ENTRIES.
@@ -984,7 +1053,9 @@ This compatibility entry point performs both phases without publishing
 static files.  Generation failure leaves staging intact; promotion
 failure also reports targets already promoted."
   (let ((staged (org-roam-blog--stage-generated-batch entries)))
-    (if (eq (plist-get staged :status) 'success)
+    (if (eq (plist-get staged
+                       :status)
+            'success)
         (org-roam-blog--promote-generated-batch staged)
       staged)))
 
@@ -995,190 +1066,226 @@ This compatibility wrapper delegates to
 `org-roam-blog--publish-generated-batch'."
   (org-roam-blog--publish-generated-batch entries))
 
-(defun org-roam-blog--validate-known-plist
-    (value allowed subject diagnostics)
+(defun org-roam-blog--validate-known-plist (value allowed subject diagnostics)
   "Validate VALUE as a plist whose keys occur in ALLOWED.
 
 SUBJECT identifies VALUE in generated messages.  Append diagnostics
 to DIAGNOSTICS and return the resulting list."
   (if (not (org-roam-blog--plist-p value))
-      (cons (org-roam-blog--diagnostic
-             'error subject "Value must be a proper even-length plist.")
+      (cons (org-roam-blog--diagnostic 'error
+                                       subject
+                                       "Value must be a proper even-length plist.")
             diagnostics)
     (dolist (key (org-roam-blog--unknown-keys value allowed)
                  diagnostics)
-      (push (org-roam-blog--diagnostic
-             'error subject (format "Unknown key: %S" key))
+      (push (org-roam-blog--diagnostic 'error
+                                       subject
+                                       (format "Unknown key: %S"
+                                               key))
             diagnostics))))
 
 (defun org-roam-blog--validate-content (diagnostics)
   "Append content-rule diagnostics to DIAGNOSTICS."
   (if (not (listp org-roam-blog-content))
-      (cons (org-roam-blog--diagnostic
-             'error 'org-roam-blog-content "Value must be a list.")
+      (cons (org-roam-blog--diagnostic 'error
+                                       'org-roam-blog-content
+                                       "Value must be a list.")
             diagnostics)
     (let ((seen-names (make-hash-table :test #'equal)))
-      (cl-loop
-       for rule in org-roam-blog-content
-       for index from 0
-       for subject = (format "org-roam-blog-content[%d]" index)
-       do
-       (setq diagnostics
-             (org-roam-blog--validate-known-plist
-              rule org-roam-blog--content-keys subject diagnostics))
-       (when (org-roam-blog--plist-p rule)
-         (let ((name (plist-get rule :name))
-               (tags (plist-get rule :tags))
-               (directory (plist-get rule :directory))
-               (template (plist-get rule :template)))
-           (if (and (stringp name) (not (string-empty-p name)))
-               (if (gethash name seen-names)
-                   (push (org-roam-blog--diagnostic
-                          'error subject
-                          (format "Duplicate content name: %S" name))
-                         diagnostics)
-                 (puthash name t seen-names))
-             (push (org-roam-blog--diagnostic
-                    'error subject "The :name field must be non-empty.")
-                   diagnostics))
-           (unless (org-roam-blog--string-list-p tags t)
-             (push (org-roam-blog--diagnostic
-                    'error subject
-                    "The :tags field must be a non-empty string list.")
-                   diagnostics))
-           (unless (or (null directory)
-                       (org-roam-blog--relative-path-p directory t))
-             (push (org-roam-blog--diagnostic
-                    'error subject
-                    (concat "The :directory field must be nil or a safe "
-                            "relative path."))
-                   diagnostics))
-           (when (and (plist-member rule :template)
-                      (not (org-roam-blog--plist-p template)))
-             (push (org-roam-blog--diagnostic
-                    'error subject "The :template field must be a plist.")
-                   diagnostics))
-           (dolist (key '(:sitemap :theindex))
-             (when (and (plist-member rule key)
-                        (not (booleanp (plist-get rule key))))
-               (push (org-roam-blog--diagnostic
-                      'error subject
-                      (format "The %S field must be boolean." key))
-                     diagnostics))))))
-      diagnostics)))
+      (cl-loop for rule in org-roam-blog-content
+               for index from 0
+               for subject = (format "org-roam-blog-content[%d]"
+                                     index)
+               do
+               (setq diagnostics (org-roam-blog--validate-known-plist rule
+                                                                      org-roam-blog--content-keys
+                                                                      subject
+                                                                      diagnostics))
+               (when (org-roam-blog--plist-p rule)
+                 (let ((name (plist-get rule
+                                        :name))
+                       (tags (plist-get rule
+                                        :tags))
+                       (directory (plist-get rule
+                                             :directory))
+                       (template (plist-get rule
+                                            :template)))
+                   (if (and (stringp name)
+                            (not (string-empty-p name)))
+                       (if (gethash name
+                                    seen-names)
+                           (push (org-roam-blog--diagnostic 'error
+                                                            subject
+                                                            (format "Duplicate content name: %S"
+                                                                    name))
+                                 diagnostics)
+                         (puthash name
+                                  t
+                                  seen-names))
+                     (push (org-roam-blog--diagnostic 'error
+                                                      subject
+                                                      "The :name field must be non-empty.")
+                           diagnostics))
+                   (unless (org-roam-blog--string-list-p tags
+                                                         t)
+                     (push (org-roam-blog--diagnostic 'error
+                                                      subject
+                                                      "The :tags field must be a non-empty string list.")
+                           diagnostics))
+                   (unless (or (null directory)
+                               (org-roam-blog--relative-path-p directory
+                                                               t))
+                     (push (org-roam-blog--diagnostic 'error
+                                                      subject
+                                                      (concat "The :directory field must be nil or a safe "
+                                                              "relative path."))
+                           diagnostics))
+                   (when (and (plist-member rule
+                                            :template)
+                              (not (org-roam-blog--plist-p template)))
+                     (push (org-roam-blog--diagnostic 'error
+                                                      subject
+                                                      "The :template field must be a plist.")
+                           diagnostics))
+                   (dolist (key '(:sitemap :theindex))
+                     (when (and (plist-member rule
+                                              key)
+                                (not (booleanp (plist-get rule
+                                                          key))))
+                       (push (org-roam-blog--diagnostic 'error
+                                                        subject
+                                                        (format "The %S field must be boolean."
+                                                                key))
+                             diagnostics)))))
+               finally return diagnostics))))
 
 (defun org-roam-blog--validate-static (diagnostics)
   "Append static-mapping diagnostics to DIAGNOSTICS."
   (if (not (listp org-roam-blog-static))
-      (cons (org-roam-blog--diagnostic
-             'error 'org-roam-blog-static "Value must be a list.")
+      (cons (org-roam-blog--diagnostic 'error
+                                       'org-roam-blog-static
+                                       "Value must be a list.")
             diagnostics)
-    (cl-loop
-     for mapping in org-roam-blog-static
-     for index from 0
-     for subject = (format "org-roam-blog-static[%d]" index)
-     do
-     (setq diagnostics
-           (org-roam-blog--validate-known-plist
-            mapping org-roam-blog--static-keys subject diagnostics))
-     (when (org-roam-blog--plist-p mapping)
-       (unless (org-roam-blog--absolute-directory-p
-                (plist-get mapping :source))
-         (push (org-roam-blog--diagnostic
-                'error subject "The :source field must be absolute.")
-               diagnostics))
-       (unless (org-roam-blog--relative-path-p
-                (plist-get mapping :directory) t)
-         (push (org-roam-blog--diagnostic
-                'error subject
-                "The :directory field must be a safe relative path.")
-               diagnostics))
-       (let ((extensions (plist-get mapping :extensions)))
-         (unless (or (null extensions) (stringp extensions))
-           (push (org-roam-blog--diagnostic
-                  'error subject
-                  "The :extensions field must be nil or a regexp string.")
-                 diagnostics))
-         (when (stringp extensions)
-           (condition-case nil
-               (string-match-p extensions "")
-             (invalid-regexp
-              (push (org-roam-blog--diagnostic
-                     'error subject
-                     "The :extensions field is not a valid regexp.")
-                    diagnostics))))))
-     finally return diagnostics)))
+    (cl-loop for mapping in org-roam-blog-static
+             for index from 0
+             for subject = (format "org-roam-blog-static[%d]"
+                                   index)
+             do
+             (setq diagnostics (org-roam-blog--validate-known-plist mapping
+                                                                    org-roam-blog--static-keys
+                                                                    subject
+                                                                    diagnostics))
+             (when (org-roam-blog--plist-p mapping)
+               (unless (org-roam-blog--absolute-directory-p (plist-get mapping
+                                                                       :source))
+                 (push (org-roam-blog--diagnostic 'error
+                                                  subject
+                                                  "The :source field must be absolute.")
+                       diagnostics))
+               (unless (org-roam-blog--relative-path-p (plist-get mapping
+                                                                  :directory)
+                                                       t)
+                 (push (org-roam-blog--diagnostic 'error
+                                                  subject
+                                                  "The :directory field must be a safe relative path.")
+                       diagnostics))
+               (let ((extensions (plist-get mapping
+                                            :extensions)))
+                 (unless (or (null extensions)
+                             (stringp extensions))
+                   (push (org-roam-blog--diagnostic 'error
+                                                    subject
+                                                    "The :extensions field must be nil or a regexp string.")
+                         diagnostics))
+                 (when (stringp extensions)
+                   (condition-case nil
+                       (string-match-p extensions
+                                       "")
+                     (invalid-regexp (push (org-roam-blog--diagnostic 'error
+                                                                      subject
+                                                                      "The :extensions field is not a valid regexp.")
+                                           diagnostics))))))
+             finally return diagnostics)))
 
 (defun org-roam-blog--validate-sitemap (diagnostics)
   "Append sitemap diagnostics to DIAGNOSTICS."
   (let ((subject 'org-roam-blog-sitemap))
-    (setq diagnostics
-          (org-roam-blog--validate-known-plist
-           org-roam-blog-sitemap org-roam-blog--sitemap-keys
-           subject diagnostics))
+    (setq diagnostics (org-roam-blog--validate-known-plist org-roam-blog-sitemap
+                                                           org-roam-blog--sitemap-keys
+                                                           subject
+                                                           diagnostics))
     (when (org-roam-blog--plist-p org-roam-blog-sitemap)
-      (let ((enabled (plist-get org-roam-blog-sitemap :enable)))
+      (let ((enabled (plist-get org-roam-blog-sitemap
+                                :enable)))
         (unless (booleanp enabled)
-          (push (org-roam-blog--diagnostic
-                 'error subject "The :enable field must be boolean.")
+          (push (org-roam-blog--diagnostic 'error
+                                           subject
+                                           "The :enable field must be boolean.")
                 diagnostics))
         (when enabled
-          (unless (org-roam-blog--relative-file-p
-                   (plist-get org-roam-blog-sitemap :path))
-            (push (org-roam-blog--diagnostic
-                   'error subject
-                   "Enabled sitemap requires a safe relative :path.")
+          (unless (org-roam-blog--relative-file-p (plist-get org-roam-blog-sitemap
+                                                             :path))
+            (push (org-roam-blog--diagnostic 'error
+                                             subject
+                                             "Enabled sitemap requires a safe relative :path.")
                   diagnostics)))
-        (when (and (plist-member org-roam-blog-sitemap :visible-tags)
-                   (not (org-roam-blog--string-list-p
-                         (plist-get org-roam-blog-sitemap
-                                    :visible-tags))))
-          (push (org-roam-blog--diagnostic
-                 'error subject
-                 "The :visible-tags field must be nil or a string list.")
+        (when (and (plist-member org-roam-blog-sitemap
+                                 :visible-tags)
+                   (not (org-roam-blog--string-list-p (plist-get org-roam-blog-sitemap
+                                                                 :visible-tags))))
+          (push (org-roam-blog--diagnostic 'error
+                                           subject
+                                           "The :visible-tags field must be nil or a string list.")
                 diagnostics))
-        (when (and (plist-member org-roam-blog-sitemap :content-function)
-                   (let ((function
-                          (plist-get org-roam-blog-sitemap
-                                     :content-function)))
-                     (not (or (null function) (functionp function)))))
-          (push (org-roam-blog--diagnostic
-                 'error subject
-                 "The :content-function field must be nil or a function.")
+        (when (and (plist-member org-roam-blog-sitemap
+                                 :content-function)
+                   (let ((function (plist-get org-roam-blog-sitemap
+                                              :content-function)))
+                     (not (or (null function)
+                              (functionp function)))))
+          (push (org-roam-blog--diagnostic 'error
+                                           subject
+                                           "The :content-function field must be nil or a function.")
                 diagnostics))
-        (when (and (plist-member org-roam-blog-sitemap :template)
-                   (not (org-roam-blog--plist-p
-                         (plist-get org-roam-blog-sitemap :template))))
-          (push (org-roam-blog--diagnostic
-                 'error subject "The :template field must be a plist.")
+        (when (and (plist-member org-roam-blog-sitemap
+                                 :template)
+                   (not (org-roam-blog--plist-p (plist-get org-roam-blog-sitemap
+                                                           :template))))
+          (push (org-roam-blog--diagnostic 'error
+                                           subject
+                                           "The :template field must be a plist.")
                 diagnostics))))
     diagnostics))
 
 (defun org-roam-blog--validate-theindex (diagnostics)
   "Append theindex diagnostics to DIAGNOSTICS."
   (let ((subject 'org-roam-blog-theindex))
-    (setq diagnostics
-          (org-roam-blog--validate-known-plist
-           org-roam-blog-theindex org-roam-blog--theindex-keys
-           subject diagnostics))
+    (setq diagnostics (org-roam-blog--validate-known-plist org-roam-blog-theindex
+                                                           org-roam-blog--theindex-keys
+                                                           subject
+                                                           diagnostics))
     (when (org-roam-blog--plist-p org-roam-blog-theindex)
-      (let ((enabled (plist-get org-roam-blog-theindex :enable)))
+      (let ((enabled (plist-get org-roam-blog-theindex
+                                :enable)))
         (unless (booleanp enabled)
-          (push (org-roam-blog--diagnostic
-                 'error subject "The :enable field must be boolean.")
+          (push (org-roam-blog--diagnostic 'error
+                                           subject
+                                           "The :enable field must be boolean.")
                 diagnostics))
         (when (and enabled
-                   (not (org-roam-blog--relative-file-p
-                         (plist-get org-roam-blog-theindex :path))))
-          (push (org-roam-blog--diagnostic
-                 'error subject
-                 "Enabled theindex requires a safe relative :path.")
+                   (not (org-roam-blog--relative-file-p (plist-get org-roam-blog-theindex
+                                                                   :path))))
+          (push (org-roam-blog--diagnostic 'error
+                                           subject
+                                           "Enabled theindex requires a safe relative :path.")
                 diagnostics))
-        (when (and (plist-member org-roam-blog-theindex :template)
-                   (not (org-roam-blog--plist-p
-                         (plist-get org-roam-blog-theindex :template))))
-          (push (org-roam-blog--diagnostic
-                 'error subject "The :template field must be a plist.")
+        (when (and (plist-member org-roam-blog-theindex
+                                 :template)
+                   (not (org-roam-blog--plist-p (plist-get org-roam-blog-theindex
+                                                           :template))))
+          (push (org-roam-blog--diagnostic 'error
+                                           subject
+                                           "The :template field must be a plist.")
                 diagnostics))))
     diagnostics))
 
@@ -1188,42 +1295,40 @@ to DIAGNOSTICS and return the resulting list."
 This function is read-only.  It does not create directories,
 synchronize Org-roam, or repair configuration."
   (let (diagnostics)
-    (dolist (entry `((org-roam-blog-directory
-                      . ,org-roam-blog-directory)
-                     (org-roam-blog-publish-directory
-                      . ,org-roam-blog-publish-directory)))
+    (dolist (entry `((org-roam-blog-directory . ,org-roam-blog-directory)
+                     (org-roam-blog-publish-directory . ,org-roam-blog-publish-directory)))
       (unless (org-roam-blog--absolute-directory-p (cdr entry))
-        (push (org-roam-blog--diagnostic
-               'error (car entry) "Value must be an absolute directory.")
+        (push (org-roam-blog--diagnostic 'error
+                                         (car entry)
+                                         "Value must be an absolute directory.")
               diagnostics)))
-    (unless (org-roam-blog--relative-path-p
-             org-roam-blog-publish-store)
-      (push (org-roam-blog--diagnostic
-             'error 'org-roam-blog-publish-store
-             "Value must be a non-empty safe relative directory.")
+    (unless (org-roam-blog--relative-path-p org-roam-blog-publish-store)
+      (push (org-roam-blog--diagnostic 'error
+                                       'org-roam-blog-publish-store
+                                       "Value must be a non-empty safe relative directory.")
             diagnostics))
     (unless (org-roam-blog--valid-site-url-p org-roam-blog-site-url)
-      (push (org-roam-blog--diagnostic
-             'error 'org-roam-blog-site-url
-             (concat "Value must be nil or an absolute HTTP(S) URL ending "
-                     "in / without query or fragment."))
+      (push (org-roam-blog--diagnostic 'error
+                                       'org-roam-blog-site-url
+                                       (concat "Value must be nil or an absolute HTTP(S) URL ending "
+                                               "in / without query or fragment."))
             diagnostics))
     (unless (or (null org-roam-blog-temporary-directory)
                 (org-roam-blog--absolute-directory-p
                  org-roam-blog-temporary-directory))
-      (push (org-roam-blog--diagnostic
-             'error 'org-roam-blog-temporary-directory
-             "Value must be nil or an absolute directory.")
+      (push (org-roam-blog--diagnostic 'error
+                                       'org-roam-blog-temporary-directory
+                                       "Value must be nil or an absolute directory.")
             diagnostics))
     (unless (org-roam-blog--plist-p org-roam-blog-default-template)
-      (push (org-roam-blog--diagnostic
-             'error 'org-roam-blog-default-template
-             "Value must be a proper even-length plist.")
+      (push (org-roam-blog--diagnostic 'error
+                                       'org-roam-blog-default-template
+                                       "Value must be a proper even-length plist.")
             diagnostics))
-    (setq diagnostics (org-roam-blog--validate-content diagnostics)
-          diagnostics (org-roam-blog--validate-static diagnostics)
-          diagnostics (org-roam-blog--validate-sitemap diagnostics)
-          diagnostics (org-roam-blog--validate-theindex diagnostics))
+    (setq diagnostics (org-roam-blog--validate-content diagnostics))
+    (setq diagnostics (org-roam-blog--validate-static diagnostics))
+    (setq diagnostics (org-roam-blog--validate-sitemap diagnostics))
+    (setq diagnostics (org-roam-blog--validate-theindex diagnostics))
     (nreverse diagnostics)))
 
 (defun org-roam-blog--capability (name available required detail)
@@ -1231,63 +1336,79 @@ synchronize Org-roam, or repair configuration."
 
 NAME identifies the capability.  AVAILABLE and REQUIRED are booleans.
 DETAIL describes the API being checked."
-  (list :name name :available (and available t)
-        :required (and required t) :detail detail))
+  (list :name name
+        :available (and available
+                        t)
+        :required (and required
+                       t)
+        :detail detail))
 
 (defun org-roam-blog--check-capabilities ()
   "Return capability records required by the current configuration.
 
 The probes are read-only and do not export files, write caches, or
 synchronize the Org-roam database."
-  (let ((theindex-enabled
-         (and (org-roam-blog--plist-p org-roam-blog-theindex)
-              (plist-get org-roam-blog-theindex :enable))))
-    (list
-     (org-roam-blog--capability
-      'org-export (fboundp 'org-export-to-file) t
-      "`org-export-to-file' is available.")
-     (org-roam-blog--capability
-      'ox-html (fboundp 'org-html-export-to-html) t
-      "`org-html-export-to-html' is available.")
-     (org-roam-blog--capability
-      'org-publish (fboundp 'org-publish-attachment) t
-      "`org-publish-attachment' is available.")
-     (org-roam-blog--capability
-      'org-roam-db-query (fboundp 'org-roam-db-query) t
-      "`org-roam-db-query' is available.")
-     (org-roam-blog--capability
-      'url-parse (fboundp 'url-generic-parse-url) t
-      "`url-generic-parse-url' is available.")
-     (org-roam-blog--capability
-      'real-path (fboundp 'file-truename) t
-      "`file-truename' is available.")
-     (org-roam-blog--capability
-      'staging (and (fboundp 'make-temp-file)
-                    (fboundp 'rename-file)
-                    (fboundp 'copy-file))
-      t "Temporary directories and file promotion are available.")
-     (org-roam-blog--capability
-      'org-publish-index (fboundp 'org-publish-collect-index)
-      theindex-enabled "`org-publish-collect-index' is available."))))
+  (let ((theindex-enabled (and (org-roam-blog--plist-p org-roam-blog-theindex)
+                               (plist-get org-roam-blog-theindex
+                                          :enable))))
+    (list (org-roam-blog--capability 'org-export
+                                     (fboundp 'org-export-to-file)
+                                     t
+                                     "`org-export-to-file' is available.")
+          (org-roam-blog--capability 'ox-html
+                                     (fboundp 'org-html-export-to-html)
+                                     t
+                                     "`org-html-export-to-html' is available.")
+          (org-roam-blog--capability 'org-publish
+                                     (fboundp 'org-publish-attachment)
+                                     t
+                                     "`org-publish-attachment' is available.")
+          (org-roam-blog--capability 'org-roam-db-query
+                                     (fboundp 'org-roam-db-query)
+                                     t
+                                     "`org-roam-db-query' is available.")
+          (org-roam-blog--capability 'url-parse
+                                     (fboundp 'url-generic-parse-url)
+                                     t
+                                     "`url-generic-parse-url' is available.")
+          (org-roam-blog--capability 'real-path
+                                     (fboundp 'file-truename)
+                                     t
+                                     "`file-truename' is available.")
+          (org-roam-blog--capability 'staging
+                                     (and (fboundp 'make-temp-file)
+                                          (fboundp 'rename-file)
+                                          (fboundp 'copy-file))
+                                     t
+                                     "Temporary directories and file promotion are available.")
+          (org-roam-blog--capability 'org-publish-index
+                                     (fboundp 'org-publish-collect-index)
+                                     theindex-enabled
+                                     "`org-publish-collect-index' is available."))))
 
 (defun org-roam-blog--collect-diagnostics ()
   "Return variable and required-capability diagnostics."
   (let ((diagnostics (org-roam-blog--validate-variables)))
     (dolist (capability (org-roam-blog--check-capabilities))
-      (when (and (plist-get capability :required)
-                 (not (plist-get capability :available)))
-        (push (org-roam-blog--diagnostic
-               'error (plist-get capability :name)
-               (plist-get capability :detail))
+      (when (and (plist-get capability
+                            :required)
+                 (not (plist-get capability
+                                 :available)))
+        (push (org-roam-blog--diagnostic 'error
+                                         (plist-get capability
+                                                    :name)
+                                         (plist-get capability
+                                                    :detail))
               diagnostics)))
     (nreverse diagnostics)))
 
 (defun org-roam-blog--diagnostics-have-errors-p (diagnostics)
   "Return non-nil when DIAGNOSTICS contains an error."
-  (cl-some
-   (lambda (diagnostic)
-     (eq (plist-get diagnostic :severity) 'error))
-   diagnostics))
+  (cl-some (lambda (diagnostic)
+             (eq (plist-get diagnostic
+                            :severity)
+                 'error))
+           diagnostics))
 
 (defun org-roam-blog--prepare-publication ()
   "Build and validate a publication plan without writing output.
@@ -1298,44 +1419,35 @@ database queries.  Manifest, static enumeration, target, and conflict
 errors prevent publication."
   (let ((diagnostics (org-roam-blog--collect-diagnostics))
         entries static plan)
-    (when (and (not (org-roam-blog--diagnostics-have-errors-p
-                     diagnostics))
-               (plist-get org-roam-blog-theindex :enable))
-      (push
-       (org-roam-blog--diagnostic
-        'error 'org-roam-blog-theindex
-        "Theindex publication is not implemented.")
-       diagnostics))
+    (when (and (not (org-roam-blog--diagnostics-have-errors-p diagnostics))
+               (plist-get org-roam-blog-theindex
+                          :enable))
+      (push (org-roam-blog--diagnostic 'error
+                                       'org-roam-blog-theindex
+                                       "Theindex publication is not implemented.")
+            diagnostics))
     (unless (org-roam-blog--diagnostics-have-errors-p diagnostics)
       (let ((manifest (org-roam-blog--build-manifest)))
-        (setq entries (plist-get manifest :entries)
-              diagnostics
-              (append diagnostics
-                      (plist-get manifest :diagnostics)))))
+        (setq entries (plist-get manifest
+                                 :entries))
+        (setq diagnostics (append diagnostics
+                                  (plist-get manifest
+                                             :diagnostics)))))
     (unless (org-roam-blog--diagnostics-have-errors-p diagnostics)
       (condition-case error-data
           (setq static (org-roam-blog--static-files)
-                plan
-                (append
-                 (org-roam-blog--generated-output-plan entries)
-                 (org-roam-blog--static-output-plan static))
-                diagnostics
-                (append
-                 diagnostics
-                 (org-roam-blog--output-conflicts plan)
-                 (org-roam-blog--output-target-diagnostics plan)))
-        (error
-         (setq diagnostics
-               (append
-                diagnostics
-                (list
-                 (org-roam-blog--diagnostic
-                  'error 'publication-plan
-                  (error-message-string error-data))))))))
-    (list :status
-          (if (org-roam-blog--diagnostics-have-errors-p diagnostics)
-              'failure
-            'success)
+                plan (append (org-roam-blog--generated-output-plan entries)
+                             (org-roam-blog--static-output-plan static))
+                diagnostics (append diagnostics
+                                    (org-roam-blog--output-conflicts plan)
+                                    (org-roam-blog--output-target-diagnostics plan)))
+        (error (setq diagnostics (append diagnostics
+                                         (list (org-roam-blog--diagnostic 'error
+                                                                          'publication-plan
+                                                                          (error-message-string error-data))))))))
+    (list :status (if (org-roam-blog--diagnostics-have-errors-p diagnostics)
+                      'failure
+                    'success)
           :entries entries
           :static static
           :plan plan
@@ -1350,47 +1462,61 @@ no publication writes.  Generated output is fully staged before
 static files are copied, then generated content is promoted in
 content, sitemap, and redirect order."
   (let* ((prepared (org-roam-blog--prepare-publication))
-         (diagnostics (plist-get prepared :diagnostics))
-         (plan (plist-get prepared :plan)))
-    (if (eq (plist-get prepared :status) 'failure)
-        (list :status 'failure :staging nil
-              :static-published nil :promoted nil
-              :plan plan :diagnostics diagnostics)
-      (let ((staged
-             (org-roam-blog--stage-generated-batch
-              (plist-get prepared :entries))))
-        (if (eq (plist-get staged :status) 'failure)
+         (diagnostics (plist-get prepared
+                                 :diagnostics))
+         (plan (plist-get prepared
+                          :plan)))
+    (if (eq (plist-get prepared
+                       :status)
+            'failure)
+        (list :status 'failure
+              :staging nil
+              :static-published nil
+              :promoted nil
+              :plan plan
+              :diagnostics diagnostics)
+      (let ((staged (org-roam-blog--stage-generated-batch (plist-get prepared
+                                                                     :entries))))
+        (if (eq (plist-get staged
+                           :status)
+                'failure)
             (list :status 'failure
-                  :staging (plist-get staged :staging)
-                  :static-published nil :promoted nil
+                  :staging (plist-get staged
+                                      :staging)
+                  :static-published nil
+                  :promoted nil
                   :plan plan
-                  :diagnostics
-                  (append diagnostics
-                          (plist-get staged :diagnostics)))
-          (let ((static-result
-                 (org-roam-blog--publish-static-batch
-                  (plist-get prepared :static))))
-            (if (eq (plist-get static-result :status) 'failure)
+                  :diagnostics (append diagnostics
+                                       (plist-get staged
+                                                  :diagnostics)))
+          (let ((static-result (org-roam-blog--publish-static-batch (plist-get prepared
+                                                                               :static))))
+            (if (eq (plist-get static-result
+                               :status)
+                    'failure)
                 (list :status 'failure
-                      :staging (plist-get staged :staging)
-                      :static-published
-                      (plist-get static-result :published)
-                      :promoted nil :plan plan
-                      :diagnostics
-                      (append diagnostics
-                              (plist-get static-result :diagnostics)))
-              (let ((promoted
-                     (org-roam-blog--promote-generated-batch staged)))
-                (list
-                 :status (plist-get promoted :status)
-                 :staging (plist-get promoted :staging)
-                 :static-published
-                 (plist-get static-result :published)
-                 :promoted (plist-get promoted :promoted)
-                 :plan plan
-                 :diagnostics
-                 (append diagnostics
-                         (plist-get promoted :diagnostics)))))))))))
+                      :staging (plist-get staged
+                                          :staging)
+                      :static-published (plist-get static-result
+                                                   :published)
+                      :promoted nil
+                      :plan plan
+                      :diagnostics (append diagnostics
+                                           (plist-get static-result
+                                                      :diagnostics)))
+              (let ((promoted (org-roam-blog--promote-generated-batch staged)))
+                (list :status (plist-get promoted
+                                         :status)
+                      :staging (plist-get promoted
+                                          :staging)
+                      :static-published (plist-get static-result
+                                                   :published)
+                      :promoted (plist-get promoted
+                                           :promoted)
+                      :plan plan
+                      :diagnostics (append diagnostics
+                                           (plist-get promoted
+                                                      :diagnostics)))))))))))
 
 (define-derived-mode org-roam-blog-diagnostics-mode special-mode
   "Org-roam-Blog-Diagnostics"
@@ -1405,11 +1531,12 @@ content, sitemap, and redirect order."
         (insert "Org-roam Blog diagnostics\n\n")
         (dolist (diagnostic diagnostics)
           (insert (format "%s  %s\n  %s\n\n"
-                          (upcase
-                           (symbol-name
-                            (plist-get diagnostic :severity)))
-                          (plist-get diagnostic :subject)
-                          (plist-get diagnostic :message))))
+                          (upcase (symbol-name (plist-get diagnostic
+                                                          :severity)))
+                          (plist-get diagnostic
+                                     :subject)
+                          (plist-get diagnostic
+                                     :message))))
         (goto-char (point-min))
         (org-roam-blog-diagnostics-mode)))
     (display-buffer buffer)))
@@ -1449,10 +1576,12 @@ staging directory and any partially published targets are included in
 the returned result."
   (interactive)
   (let ((result (org-roam-blog--publish)))
-    (if (eq (plist-get result :status) 'success)
+    (if (eq (plist-get result
+                       :status)
+            'success)
         (message "Org-roam Blog publication completed")
-      (org-roam-blog--render-diagnostics
-       (plist-get result :diagnostics)))
+      (org-roam-blog--render-diagnostics (plist-get result
+                                                    :diagnostics)))
     result))
 
 (provide 'org-roam-blog)
