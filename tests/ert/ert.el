@@ -329,14 +329,21 @@
    (equal
     (org-roam-blog--project-sitemap-tags
      '("blog" "post" "emacs" "linux")
-     '(:include-tags ("post" "emacs" "linux")
-       :exclude-tags ("post" "linux")))
-    '("emacs"))))
+     '(:visible-tags ("post" "emacs")))
+    '("post" "emacs")))
+  (should-not
+   (org-roam-blog--project-sitemap-tags
+    '("blog" "post")
+    '(:visible-tags nil)))
+  (should-not
+   (org-roam-blog--project-sitemap-tags
+    '("blog" "post")
+    nil)))
 
 (ert-deftest org-roam-blog-test-default-sitemap-uses-relative-urls ()
   (let* ((config
           '(:path "pages/sitemap.html" :title "Posts"
-            :include-tags nil :exclude-tags ("blog")))
+            :visible-tags ("emacs")))
          (entries
           '((:title "Post" :source-relative "post.org"
              :store-relative "_org/id/post.html"
@@ -356,7 +363,7 @@
   (let* ((received nil)
          (org-roam-blog-sitemap
           (list :enable t :path "sitemap.html"
-                :include-tags '("emacs")
+                :visible-tags '("emacs")
                 :content-function
                 (lambda (entries _config)
                   (setq received entries)
@@ -384,7 +391,7 @@
          (org-roam-blog-sitemap
           '(:enable t :path "sitemap.html" :title "Posts"
             :sort anti-chronologically
-            :exclude-tags ("blog")))
+            :visible-tags nil))
          (org-roam-blog-theindex '(:enable nil))
          (entry
           (list :title "Index"

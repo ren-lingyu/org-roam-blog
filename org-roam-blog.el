@@ -160,14 +160,14 @@ content staging directory."
 The supported schema is:
 
   (:enable BOOLEAN :path RELATIVE-FILE :title STRING :sort SYMBOL
-   :include-tags TAGS-OR-NIL :exclude-tags TAGS-OR-NIL
+   :visible-tags TAGS-OR-NIL
    :content-function FUNCTION-OR-NIL :template PLIST)
 
-Tag options affect only tags displayed by the sitemap and never
-select content.  A nil `:include-tags' value disables the whitelist.
-When non-nil, `:content-function' is called with the prepared manifest
-entries and this configuration plist, and must return an Org source
-string."
+Only tags explicitly listed in `:visible-tags' are displayed by the
+sitemap.  A missing or nil value displays no tags.  This whitelist
+never selects content.  When non-nil, `:content-function' is called
+with the prepared manifest entries and this configuration plist, and
+must return an Org source string."
   :type 'plist
   :group 'org-roam-blog)
 
@@ -195,8 +195,8 @@ required."
   "Default regexp matching static file extensions.")
 
 (defconst org-roam-blog--sitemap-keys
-  '(:enable :path :title :sort :include-tags :exclude-tags
-    :content-function :template))
+  '(:enable :path :title :sort :visible-tags :content-function
+    :template))
 
 (defconst org-roam-blog--theindex-keys
   '(:enable :path :title :template))
@@ -755,13 +755,10 @@ redirect file."
     (nreverse staged)))
 
 (defun org-roam-blog--project-sitemap-tags (tags config)
-  "Project TAGS through sitemap CONFIG include and exclude lists."
-  (let ((included (plist-get config :include-tags))
-        (excluded (plist-get config :exclude-tags)))
-    (cl-remove-if
-     (lambda (tag)
-       (or (and included (not (member tag included)))
-           (member tag excluded)))
+  "Return members of TAGS listed by sitemap CONFIG as visible."
+  (let ((visible (plist-get config :visible-tags)))
+    (cl-remove-if-not
+     (lambda (tag) (member tag visible))
      tags)))
 
 (defun org-roam-blog--sitemap-entry-time (entry)
@@ -1132,14 +1129,14 @@ to DIAGNOSTICS and return the resulting list."
                    'error subject
                    "Enabled sitemap requires a safe relative :path.")
                   diagnostics)))
-        (dolist (key '(:include-tags :exclude-tags))
-          (when (and (plist-member org-roam-blog-sitemap key)
-                     (not (org-roam-blog--string-list-p
-                           (plist-get org-roam-blog-sitemap key))))
-            (push (org-roam-blog--diagnostic
-                   'error subject
-                   (format "The %S field must be nil or a string list." key))
-                  diagnostics)))
+        (when (and (plist-member org-roam-blog-sitemap :visible-tags)
+                   (not (org-roam-blog--string-list-p
+                         (plist-get org-roam-blog-sitemap
+                                    :visible-tags))))
+          (push (org-roam-blog--diagnostic
+                 'error subject
+                 "The :visible-tags field must be nil or a string list.")
+                diagnostics))
         (when (and (plist-member org-roam-blog-sitemap :content-function)
                    (let ((function
                           (plist-get org-roam-blog-sitemap
