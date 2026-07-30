@@ -73,6 +73,33 @@
          (plist-get diagnostic :message)))
       (org-roam-blog--validate-variables)))))
 
+(ert-deftest org-roam-blog-test-sitemap-validates-visible-tags ()
+  (dolist (config '((:enable nil :visible-tags nil)
+                    (:enable nil :visible-tags ("emacs" "lisp"))))
+    (let ((org-roam-blog-sitemap config))
+      (should-not (org-roam-blog--validate-sitemap nil))))
+  (let* ((org-roam-blog-sitemap '(:enable nil :visible-tags ("emacs" 1)))
+         (diagnostics (org-roam-blog--validate-sitemap nil)))
+    (should
+     (cl-find-if
+      (lambda (diagnostic)
+        (string-match-p
+         ":visible-tags field must be nil or a string list"
+         (plist-get diagnostic
+                    :message)))
+      diagnostics)))
+  (dolist (key '(:include-tags :exclude-tags))
+    (let* ((org-roam-blog-sitemap (list :enable nil key '("emacs")))
+           (diagnostics (org-roam-blog--validate-sitemap nil)))
+      (should
+       (cl-find-if
+        (lambda (diagnostic)
+          (string-match-p
+           (format "Unknown key: %S" key)
+           (plist-get diagnostic
+                      :message)))
+        diagnostics)))))
+
 (ert-deftest org-roam-blog-test-query-rule-nodes-matches-all-tags ()
   (let ((nodes
          (list
