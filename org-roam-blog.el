@@ -473,8 +473,8 @@ diagnostic."
                         :content-name (plist-get rule
                                                  :name)
                         :tags (copy-sequence (org-roam-node-tags node))
-                        :published-at (org-roam-blog--node-published node)
-                        :modified (org-roam-blog--file-modified-time source)
+                        :published-time (org-roam-blog--node-published node)
+                        :modified-time (org-roam-blog--file-modified-time source)
                         :sitemap (and (plist-get rule
                                                 :sitemap)
                                       t)
@@ -899,7 +899,7 @@ redirect file."
 (defun org-roam-blog--sitemap-entry-time (entry)
   "Return a sortable time value from sitemap ENTRY, or nil."
   (let ((published (plist-get entry
-                              :published-at)))
+                              :published-time)))
     (cond ((null published)
            nil)
           ((stringp published)
@@ -951,8 +951,8 @@ redirect file."
 (defun org-roam-blog--default-sitemap-content (entries config)
   "Return default Org sitemap content for ENTRIES and CONFIG.
 
-Display each entry's `:published-at' value when present.  The
-filesystem `:modified' time remains manifest metadata and is not
+Display each entry's `:published-time' value when present.  The
+filesystem `:modified-time' remains manifest metadata and is not
 included in the default sitemap."
   (let ((path (plist-get config
                          :path))
@@ -975,7 +975,7 @@ included in the default sitemap."
                                                                                       (plist-get entry
                                                                                                  :source-relative))))
                                 (published (plist-get entry
-                                                      :published-at))
+                                                      :published-time))
                                 (tags (plist-get entry
                                                  :tags)))
                            (concat "- [[file:" url "][" description "]]"
@@ -1002,9 +1002,9 @@ included in the default sitemap."
 The configured content function is called as (FUNCTION ENTRIES
 CONFIG), where ENTRIES have already been filtered, sorted, and had
 their displayed tags projected.  It must return an Org source
-string.  Entries retain both `:published-at' and filesystem
-`:modified' metadata; the default generator only displays
-`:published-at'."
+string.  Entries retain both `:published-time' and filesystem
+`:modified-time' metadata; the default generator only displays
+`:published-time'."
   (let* ((config org-roam-blog-sitemap)
          (prepared (org-roam-blog--prepare-sitemap-entries entries
                                                            config))

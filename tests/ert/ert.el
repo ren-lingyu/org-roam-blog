@@ -326,10 +326,10 @@
                    (entry (car (plist-get manifest
                                           :entries))))
               (should (equal (plist-get entry
-                                        :published-at)
+                                        :published-time)
                              "2026-07-30"))
               (should (equal (plist-get entry
-                                        :modified)
+                                        :modified-time)
                              modified)))))
       (delete-directory source-root
                         t))))
@@ -597,15 +597,15 @@
   (let* ((config (list :sort 'anti-chronologically
                        :visible-tags nil))
          (undated (list :title "Undated"
-                        :published-at nil
+                        :published-time nil
                         :tags nil
                         :sitemap t))
          (older (list :title "Older"
-                      :published-at "2025-01-01"
+                      :published-time "2025-01-01"
                       :tags nil
                       :sitemap t))
          (newer (list :title "Newer"
-                      :published-at "2026-01-01"
+                      :published-time "2026-01-01"
                       :tags nil
                       :sitemap t))
          (prepared (org-roam-blog--prepare-sitemap-entries (list undated
@@ -625,8 +625,8 @@
          (entries (list (list :title "Post"
                               :source-relative "post.org"
                               :store-relative "_org/id/post.html"
-                              :published-at "2026-07-30"
-                              :modified "MODIFIED-MUST-NOT-BE-DISPLAYED"
+                              :published-time "2026-07-30"
+                              :modified-time "MODIFIED-MUST-NOT-BE-DISPLAYED"
                               :tags '("blog" "emacs")
                               :sitemap t)))
          (prepared (org-roam-blog--prepare-sitemap-entries entries
