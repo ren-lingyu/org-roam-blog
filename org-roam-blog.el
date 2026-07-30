@@ -423,11 +423,10 @@ database or scan the source directory."
   "Return the cached Org-roam file modification time for SOURCE.
 
 Return nil when the Org-roam files table has no row for SOURCE."
-  (when-let* ((row (car (org-roam-db-query
-                         [:select mtime
-                          :from files
-                          :where (= file $s1)]
-                         source))))
+  (when-let* ((row (car (org-roam-db-query (vector :select 'mtime
+                                                   :from 'files
+                                                   :where '(= file $s1))
+                                           source))))
     (elt row 0)))
 
 (defun org-roam-blog--manifest-entry (node rule)
