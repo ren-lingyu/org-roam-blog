@@ -489,8 +489,8 @@ BINDINGS is an alist mapping variable symbols to values.  Restore all
 previous dynamic values when FUNCTION returns or signals an error."
   (cl-progv (mapcar #'car
                     bindings)
-            (mapcar #'cdr
-                    bindings)
+      (mapcar #'cdr
+              bindings)
     (funcall function)))
 
 (defun org-roam-blog--make-body-context (kind entry config)
@@ -573,7 +573,7 @@ scanner preserves every byte outside the attribute value."
       (when (and (< position
                     (length html))
                  (= (aref html
-                           position)
+                          position)
                     ?=))
         (setq position (1+ position))
         (while (and (< position
@@ -614,7 +614,7 @@ OUTPUT unchanged for every other link."
                                 (car range)
                                 (cdr range)))
                (fragment-position (string-search "#"
-                                                  href))
+                                                 href))
                (base (if fragment-position
                          (substring href
                                     0
@@ -717,7 +717,7 @@ diagnostic."
                         :published-time (org-roam-blog--node-published node)
                         :modified-time (org-roam-blog--file-modified-time source)
                         :sitemap (and (plist-get rule
-                                                :sitemap)
+                                                 :sitemap)
                                       t)
                         :theindex (and (plist-get rule
                                                   :theindex)
@@ -1227,7 +1227,7 @@ included in the default sitemap."
                           :path))
          (title (or (plist-get config
                                :title)
-                   "Sitemap")))
+                    "Sitemap")))
     (concat "#+TITLE: "
             (replace-regexp-in-string "[\n\r]+"
                                       " "
@@ -1240,9 +1240,9 @@ included in the default sitemap."
                                                                   (plist-get entry
                                                                              :store-relative)))
                                 (description (org-roam-blog--sitemap-link-description (or (plist-get entry
-                                                                                                      :title)
-                                                                                           (plist-get entry
-                                                                                                      :source-relative))))
+                                                                                                     :title)
+                                                                                          (plist-get entry
+                                                                                                     :source-relative))))
                                 (published (plist-get entry
                                                       :published-time))
                                 (tags (plist-get entry
@@ -1517,7 +1517,7 @@ inspection."
                 (and theindex-enabled
                      (file-name-directory
                       (org-roam-blog--staging-output staging
-                                                    theindex-relative))))
+                                                     theindex-relative))))
                (project (and theindex-enabled
                              (org-roam-blog--theindex-project
                               theindex-entries
@@ -2214,7 +2214,8 @@ content, sitemap, and redirect order."
                                            (plist-get promoted
                                                       :diagnostics)))))))))))
 
-(define-derived-mode org-roam-blog-diagnostics-mode special-mode
+(define-derived-mode org-roam-blog-diagnostics-mode
+  special-mode
   "Org-roam-Blog-Diagnostics"
   "Major mode for an Org-roam Blog diagnostics report.")
 

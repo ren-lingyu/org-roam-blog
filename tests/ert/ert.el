@@ -11,7 +11,7 @@
 
 (ert-deftest org-roam-blog-test-merge-template-overrides-nil ()
   (should (equal (org-roam-blog--merge-template (list :with-toc t
-                                                       :section-numbers t)
+                                                      :section-numbers t)
                                                 (list :with-toc nil))
                  '(:with-toc nil :section-numbers t))))
 
@@ -67,7 +67,7 @@
          (org-roam-blog-export-default
           (list :body (list default-function))))
     (should (equal (plist-get (org-roam-blog--export-configuration
-                              (list :body nil))
+                               (list :body nil))
                               :body)
                    (list default-function)))))
 
@@ -109,8 +109,8 @@
          (org-roam-blog-theindex (list :enable nil)))
     (unwind-protect
         (progn (make-directory source)
-          (make-directory publish)
-          (should-not (org-roam-blog--validate-variables)))
+               (make-directory publish)
+               (should-not (org-roam-blog--validate-variables)))
       (delete-directory root
                         t))))
 
@@ -164,16 +164,16 @@
          (org-roam-blog-theindex (list :enable nil)))
     (unwind-protect
         (progn (make-directory source)
-          (make-directory publish)
-          (make-directory outside)
-          (make-symbolic-link outside
-                              store)
-          (should (cl-find-if
-                   (lambda (diagnostic)
-                     (eq (plist-get diagnostic
-                                    :subject)
-                         'org-roam-blog-publish-store))
-                   (org-roam-blog--validate-variables))))
+               (make-directory publish)
+               (make-directory outside)
+               (make-symbolic-link outside
+                                   store)
+               (should (cl-find-if
+                        (lambda (diagnostic)
+                          (eq (plist-get diagnostic
+                                         :subject)
+                              'org-roam-blog-publish-store))
+                        (org-roam-blog--validate-variables))))
       (delete-directory root
                         t))))
 
@@ -517,42 +517,42 @@
     (unwind-protect
         (progn (make-directory nested
                                t)
-          (write-region ""
-                        nil
-                        source
-                        nil
-                        'silent)
-          (cl-letf (((symbol-function 'org-roam-node-list)
-                     (lambda ()
-                       (list (org-roam-node-create
-                              :id "id" :title "Post" :file source :level 0
-                              :tags '("blog" "post")))))
-                    ((symbol-function 'org-roam-db-query)
-                     (lambda (&rest _arguments)
-                       nil)))
-            (let* ((manifest (org-roam-blog--build-manifest))
-                   (entry (car (plist-get manifest
-                                          :entries))))
-              (should-not (plist-get manifest
-                                     :diagnostics))
-              (should (equal (plist-get entry
-                                        :source-relative)
-                             "permanent/id/post.org"))
-              (should (equal (plist-get entry
-                                        :store-relative)
-                             "_org/permanent/id/post.html"))
-              (should (equal (plist-get entry
-                                        :redirect-relative)
-                             "posts/post.html"))
-              (should (plist-get entry
-                                 :sitemap))
-              (should (equal (plist-get entry
-                                        :template)
-                             '(:with-toc t)))
-              (should (equal (plist-get entry
-                                        :bindings)
-                             (list (cons 'org-html-head nil)
-                                   (cons 'org-html-postamble t)))))))
+               (write-region ""
+                             nil
+                             source
+                             nil
+                             'silent)
+               (cl-letf (((symbol-function 'org-roam-node-list)
+                          (lambda ()
+                            (list (org-roam-node-create
+                                   :id "id" :title "Post" :file source :level 0
+                                   :tags '("blog" "post")))))
+                         ((symbol-function 'org-roam-db-query)
+                          (lambda (&rest _arguments)
+                            nil)))
+                 (let* ((manifest (org-roam-blog--build-manifest))
+                        (entry (car (plist-get manifest
+                                               :entries))))
+                   (should-not (plist-get manifest
+                                          :diagnostics))
+                   (should (equal (plist-get entry
+                                             :source-relative)
+                                  "permanent/id/post.org"))
+                   (should (equal (plist-get entry
+                                             :store-relative)
+                                  "_org/permanent/id/post.html"))
+                   (should (equal (plist-get entry
+                                             :redirect-relative)
+                                  "posts/post.html"))
+                   (should (plist-get entry
+                                      :sitemap))
+                   (should (equal (plist-get entry
+                                             :template)
+                                  '(:with-toc t)))
+                   (should (equal (plist-get entry
+                                             :bindings)
+                                  (list (cons 'org-html-head nil)
+                                        (cons 'org-html-postamble t)))))))
       (delete-directory source-root t))))
 
 (ert-deftest org-roam-blog-test-manifest-reads-times-from-database ()
@@ -574,27 +574,27 @@
                              source
                              nil
                              'silent)
-          (cl-letf (((symbol-function 'org-roam-node-list)
-                     (lambda ()
-                       (list (org-roam-node-create
-                              :id "id"
-                              :title "Post"
-                              :file source
-                              :level 0
-                              :properties '(("PUBLISHED" . "2026-07-30"))
-                              :tags '("blog" "post")))))
-                    ((symbol-function 'org-roam-db-query)
-                     (lambda (&rest _arguments)
-                       (list (vector modified)))))
-            (let* ((manifest (org-roam-blog--build-manifest))
-                   (entry (car (plist-get manifest
-                                          :entries))))
-              (should (equal (plist-get entry
-                                        :published-time)
-                             "2026-07-30"))
-              (should (equal (plist-get entry
-                                        :modified-time)
-                             modified)))))
+               (cl-letf (((symbol-function 'org-roam-node-list)
+                          (lambda ()
+                            (list (org-roam-node-create
+                                   :id "id"
+                                   :title "Post"
+                                   :file source
+                                   :level 0
+                                   :properties '(("PUBLISHED" . "2026-07-30"))
+                                   :tags '("blog" "post")))))
+                         ((symbol-function 'org-roam-db-query)
+                          (lambda (&rest _arguments)
+                            (list (vector modified)))))
+                 (let* ((manifest (org-roam-blog--build-manifest))
+                        (entry (car (plist-get manifest
+                                               :entries))))
+                   (should (equal (plist-get entry
+                                             :published-time)
+                                  "2026-07-30"))
+                   (should (equal (plist-get entry
+                                             :modified-time)
+                                  modified)))))
       (delete-directory source-root
                         t))))
 
@@ -616,22 +616,22 @@
                              source
                              nil
                              'silent)
-          (setq node
-                (org-roam-node-create
-                 :id "id" :title "Post" :file source :level 0
-                 :tags '("blog" "post" "index")))
-          (cl-letf (((symbol-function 'org-roam-node-list)
-                     (lambda () (list node)))
-                    ((symbol-function 'org-roam-db-query)
-                     (lambda (&rest _arguments)
-                       nil)))
-            (let ((diagnostics (plist-get (org-roam-blog--build-manifest)
-                                          :diagnostics)))
-              (should (cl-find-if (lambda (diagnostic)
-                                    (string-match-p "matches content rules"
-                                                    (plist-get diagnostic
-                                                               :message)))
-                                  diagnostics)))))
+               (setq node
+                     (org-roam-node-create
+                      :id "id" :title "Post" :file source :level 0
+                      :tags '("blog" "post" "index")))
+               (cl-letf (((symbol-function 'org-roam-node-list)
+                          (lambda () (list node)))
+                         ((symbol-function 'org-roam-db-query)
+                          (lambda (&rest _arguments)
+                            nil)))
+                 (let ((diagnostics (plist-get (org-roam-blog--build-manifest)
+                                               :diagnostics)))
+                   (should (cl-find-if (lambda (diagnostic)
+                                         (string-match-p "matches content rules"
+                                                         (plist-get diagnostic
+                                                                    :message)))
+                                       diagnostics)))))
       (delete-directory source-root t))))
 
 (ert-deftest org-roam-blog-test-output-plan-detects-redirect-conflict ()
@@ -656,14 +656,14 @@
          first second)
     (unwind-protect
         (progn (setq first (org-roam-blog--make-staging-directory)
-                second (org-roam-blog--make-staging-directory))
-          (should (org-roam-blog--path-inside-p first
-                                                parent))
-          (should (org-roam-blog--path-inside-p second
-                                                parent))
-          (should-not (equal first second))
-          (should (string-match-p "org-roam-blog-[0-9]\\{8\\}T[0-9]\\{6\\}-"
-                                  (file-name-nondirectory first))))
+                     second (org-roam-blog--make-staging-directory))
+               (should (org-roam-blog--path-inside-p first
+                                                     parent))
+               (should (org-roam-blog--path-inside-p second
+                                                     parent))
+               (should-not (equal first second))
+               (should (string-match-p "org-roam-blog-[0-9]\\{8\\}T[0-9]\\{6\\}-"
+                                       (file-name-nondirectory first))))
       (delete-directory parent t))))
 
 (ert-deftest org-roam-blog-test-path-inside-rejects-symlink-escape ()
@@ -678,17 +678,17 @@
                                    outside)))
     (unwind-protect
         (progn (make-directory inside)
-          (make-directory outside)
-          (write-region ""
-                        nil
-                        source
-                        nil
-                        'silent)
-          (make-symbolic-link outside
-                              link)
-          (should-not (org-roam-blog--path-inside-p (expand-file-name "post.org"
-                                                                      link)
-                                                    inside)))
+               (make-directory outside)
+               (write-region ""
+                             nil
+                             source
+                             nil
+                             'silent)
+               (make-symbolic-link outside
+                                   link)
+               (should-not (org-roam-blog--path-inside-p (expand-file-name "post.org"
+                                                                           link)
+                                                         inside)))
       (delete-directory root
                         t))))
 
@@ -701,8 +701,8 @@
          (bound-head nil)
          (org-html-head "outside")
          (org-export-before-processing-hook (list (lambda (_backend)
-                                                   (setq hook-ran t)
-                                                   (setq bound-head org-html-head))))
+                                                    (setq hook-ran t)
+                                                    (setq bound-head org-html-head))))
          (entry (list :source source
                       :store-relative "_org/post.html"
                       :template (list :with-author nil)
@@ -713,22 +713,22 @@
                              source
                              nil
                              'silent)
-          (make-directory staging)
-          (setq visiting (find-file-noselect source))
-          (with-current-buffer visiting
-            (goto-char (point-max))
-            (insert "\nUnsaved marker\n"))
-          (let ((output (org-roam-blog--export-content-entry entry
-                                                              staging)))
-            (should hook-ran)
-            (should (equal bound-head
-                           "inside"))
-            (should (equal org-html-head
-                           "outside"))
-            (with-temp-buffer
-              (insert-file-contents output)
-              (should (search-forward "Disk body" nil t))
-              (should-not (search-forward "Unsaved marker" nil t)))))
+               (make-directory staging)
+               (setq visiting (find-file-noselect source))
+               (with-current-buffer visiting
+                 (goto-char (point-max))
+                 (insert "\nUnsaved marker\n"))
+               (let ((output (org-roam-blog--export-content-entry entry
+                                                                  staging)))
+                 (should hook-ran)
+                 (should (equal bound-head
+                                "inside"))
+                 (should (equal org-html-head
+                                "outside"))
+                 (with-temp-buffer
+                   (insert-file-contents output)
+                   (should (search-forward "Disk body" nil t))
+                   (should-not (search-forward "Unsaved marker" nil t)))))
       (when (buffer-live-p visiting)
         (with-current-buffer visiting
           (set-buffer-modified-p nil))
@@ -758,7 +758,7 @@
                       :body
                       (list (lambda (context)
                               (push (list (plist-get context
-                                                    :kind)
+                                                     :kind)
                                           (plist-get context
                                                      :title)
                                           (and (string-match-p "NATIVE"
@@ -771,8 +771,8 @@
                                       "\nFIRST"))
                             (lambda (context)
                               (push (and (string-match-p "FIRST"
-                                                        (plist-get context
-                                                                   :body))
+                                                         (plist-get context
+                                                                    :body))
                                          t)
                                     observed)
                               (concat (plist-get context
@@ -784,19 +784,19 @@
                              source
                              nil
                              'silent)
-          (make-directory staging)
-          (let ((output (org-roam-blog--export-content-entry entry
-                                                              staging)))
-            (should (equal (nreverse observed)
-                           (list (list 'content
-                                       "Post"
-                                       t)
-                                 t)))
-            (with-temp-buffer
-              (insert-file-contents output)
-              (should (search-forward "NATIVE" nil t))
-              (should (search-forward "FIRST" nil t))
-              (should (search-forward "SECOND" nil t)))))
+               (make-directory staging)
+               (let ((output (org-roam-blog--export-content-entry entry
+                                                                  staging)))
+                 (should (equal (nreverse observed)
+                                (list (list 'content
+                                            "Post"
+                                            t)
+                                      t)))
+                 (with-temp-buffer
+                   (insert-file-contents output)
+                   (should (search-forward "NATIVE" nil t))
+                   (should (search-forward "FIRST" nil t))
+                   (should (search-forward "SECOND" nil t)))))
       (delete-directory root
                         t))))
 
@@ -834,25 +834,25 @@
                       :template (list :with-author nil))))
     (unwind-protect
         (progn (make-directory temporary)
-          (write-region "#+TITLE: Post\n\nBody\n"
-                        nil
-                        source
-                        nil
-                        'silent)
-          (let ((result (org-roam-blog--publish-content-batch (list entry))))
-            (should (eq (plist-get result
-                                   :status)
-                        'success))
-            (should-not (plist-get result
-                                   :staging))
-            (should (equal (plist-get result
-                                      :promoted)
-                           (list target)))
-            (should (file-regular-p target))
-            (should-not (directory-files temporary
-                                         nil
-                                         "\\`org-roam-blog-"
-                                         t))))
+               (write-region "#+TITLE: Post\n\nBody\n"
+                             nil
+                             source
+                             nil
+                             'silent)
+               (let ((result (org-roam-blog--publish-content-batch (list entry))))
+                 (should (eq (plist-get result
+                                        :status)
+                             'success))
+                 (should-not (plist-get result
+                                        :staging))
+                 (should (equal (plist-get result
+                                           :promoted)
+                                (list target)))
+                 (should (file-regular-p target))
+                 (should-not (directory-files temporary
+                                              nil
+                                              "\\`org-roam-blog-"
+                                              t))))
       (delete-directory root t))))
 
 (ert-deftest org-roam-blog-test-content-batch-retains-failed-staging ()
@@ -866,16 +866,16 @@
                       :template nil)))
     (unwind-protect
         (progn (make-directory temporary)
-          (let* ((result (org-roam-blog--publish-content-batch (list entry)))
-                 (staging (plist-get result
-                                     :staging)))
-            (should (eq (plist-get result
-                                   :status)
-                        'failure))
-            (should (file-directory-p staging))
-            (should-not (file-exists-p target))
-            (should (plist-get result
-                               :diagnostics))))
+               (let* ((result (org-roam-blog--publish-content-batch (list entry)))
+                      (staging (plist-get result
+                                          :staging)))
+                 (should (eq (plist-get result
+                                        :status)
+                             'failure))
+                 (should (file-directory-p staging))
+                 (should-not (file-exists-p target))
+                 (should (plist-get result
+                                    :diagnostics))))
       (delete-directory root t))))
 
 (ert-deftest org-roam-blog-test-promote-file-rejects-symlink-target ()
@@ -889,17 +889,17 @@
                              staged
                              nil
                              'silent)
-          (write-region "old"
-                        nil
-                        actual
-                        nil
-                        'silent)
-          (make-symbolic-link actual target)
-          (should-error (org-roam-blog--promote-file staged
-                                                     target))
-          (with-temp-buffer
-            (insert-file-contents actual)
-            (should (equal (buffer-string) "old"))))
+               (write-region "old"
+                             nil
+                             actual
+                             nil
+                             'silent)
+               (make-symbolic-link actual target)
+               (should-error (org-roam-blog--promote-file staged
+                                                          target))
+               (with-temp-buffer
+                 (insert-file-contents actual)
+                 (should (equal (buffer-string) "old"))))
       (delete-directory root t))))
 
 (ert-deftest org-roam-blog-test-relative-url-preserves-layout ()
@@ -947,9 +947,9 @@
                       :tags nil
                       :sitemap t))
          (prepared (org-roam-blog--sitemap-prepare-entries (list undated
-                                                                  older
-                                                                  newer)
-                                                            config)))
+                                                                 older
+                                                                 newer)
+                                                           config)))
     (should (equal (mapcar (lambda (entry)
                              (plist-get entry
                                         :title))
@@ -996,7 +996,7 @@
                                                               :sitemap t)))
                    "#+TITLE: Custom\n"))
     (should (equal (plist-get (car (plist-get received
-                                               :entries))
+                                              :entries))
                               :tags)
                    '("emacs")))))
 
@@ -1048,42 +1048,42 @@
                       :template (list :with-author nil))))
     (unwind-protect
         (progn (make-directory temporary)
-          (write-region "#+TITLE: Index\n\nBody\n"
-                        nil
-                        source
-                        nil
-                        'silent)
-          (let ((result (org-roam-blog--publish-generated-batch (list entry))))
-            (ert-info ((format "Batch result: %S" result))
-              (should (eq (plist-get result
-                                     :status)
-                          'success)))
-            (should (file-regular-p store-output))
-            (should (file-regular-p (expand-file-name "sitemap.html"
-                                                      publish)))
-            (should (file-regular-p (expand-file-name "index.html"
-                                                      publish)))
-            (with-temp-buffer
-              (insert-file-contents (expand-file-name "sitemap.html"
-                                                      publish))
-              (should (search-forward "<meta name=\"sitemap-binding\">"
-                                      nil
-                                      t))
-              (should (search-forward "SITEMAP-BODY"
-                                      nil
-                                      t)))
-            (should (eq (plist-get sitemap-context
-                                   :kind)
-                        'sitemap))
-            (should-not (plist-get sitemap-context
-                                   :entry))
-            (should (equal org-html-head
-                           "outside-head"))
-            (should (equal (plist-get result
-                                      :promoted)
-                           (list store-output
-                                 (expand-file-name "sitemap.html" publish)
-                                 (expand-file-name "index.html" publish))))))
+               (write-region "#+TITLE: Index\n\nBody\n"
+                             nil
+                             source
+                             nil
+                             'silent)
+               (let ((result (org-roam-blog--publish-generated-batch (list entry))))
+                 (ert-info ((format "Batch result: %S" result))
+                   (should (eq (plist-get result
+                                          :status)
+                               'success)))
+                 (should (file-regular-p store-output))
+                 (should (file-regular-p (expand-file-name "sitemap.html"
+                                                           publish)))
+                 (should (file-regular-p (expand-file-name "index.html"
+                                                           publish)))
+                 (with-temp-buffer
+                   (insert-file-contents (expand-file-name "sitemap.html"
+                                                           publish))
+                   (should (search-forward "<meta name=\"sitemap-binding\">"
+                                           nil
+                                           t))
+                   (should (search-forward "SITEMAP-BODY"
+                                           nil
+                                           t)))
+                 (should (eq (plist-get sitemap-context
+                                        :kind)
+                             'sitemap))
+                 (should-not (plist-get sitemap-context
+                                        :entry))
+                 (should (equal org-html-head
+                                "outside-head"))
+                 (should (equal (plist-get result
+                                           :promoted)
+                                (list store-output
+                                      (expand-file-name "sitemap.html" publish)
+                                      (expand-file-name "index.html" publish))))))
       (delete-directory root t))))
 
 (ert-deftest org-roam-blog-test-static-files-filter-and-preserve-layout ()
@@ -1098,27 +1098,27 @@
         (progn (make-directory (expand-file-name "icons"
                                                  source)
                                t)
-          (write-region "body {}"
-                        nil
-                        (expand-file-name "site.css" source)
-                        nil
-                        'silent)
-          (write-region "<svg/>"
-                        nil
-                        (expand-file-name "icons/logo.svg" source)
-                        nil
-                        'silent)
-          (write-region "ignored"
-                        nil
-                        (expand-file-name "notes.txt" source)
-                        nil
-                        'silent)
-          (let ((records (org-roam-blog--static-files)))
-            (should (equal (mapcar (lambda (record)
-                                     (plist-get record
-                                                :target-relative))
-                                   records)
-                           '("static/icons/logo.svg" "static/site.css")))))
+               (write-region "body {}"
+                             nil
+                             (expand-file-name "site.css" source)
+                             nil
+                             'silent)
+               (write-region "<svg/>"
+                             nil
+                             (expand-file-name "icons/logo.svg" source)
+                             nil
+                             'silent)
+               (write-region "ignored"
+                             nil
+                             (expand-file-name "notes.txt" source)
+                             nil
+                             'silent)
+               (let ((records (org-roam-blog--static-files)))
+                 (should (equal (mapcar (lambda (record)
+                                          (plist-get record
+                                                     :target-relative))
+                                        records)
+                                '("static/icons/logo.svg" "static/site.css")))))
       (delete-directory root t))))
 
 (ert-deftest org-roam-blog-test-static-output-plan-detects-conflict ()
@@ -1150,19 +1150,19 @@
     (unwind-protect
         (progn (make-directory (file-name-directory source)
                                t)
-          (write-region "body {}"
-                        nil
-                        source
-                        nil
-                        'silent)
-          (should (equal (org-roam-blog--publish-static (list record))
-                         (list target)))
-          (should (file-regular-p target))
-          (with-temp-buffer
-            (insert-file-contents target)
-            (should (equal (buffer-string) "body {}")))
-          (should (equal org-publish-project-alist
-                         '(("existing" :base-directory "/tmp")))))
+               (write-region "body {}"
+                             nil
+                             source
+                             nil
+                             'silent)
+               (should (equal (org-roam-blog--publish-static (list record))
+                              (list target)))
+               (should (file-regular-p target))
+               (with-temp-buffer
+                 (insert-file-contents target)
+                 (should (equal (buffer-string) "body {}")))
+               (should (equal org-publish-project-alist
+                              '(("existing" :base-directory "/tmp")))))
       (delete-directory root t))))
 
 (ert-deftest org-roam-blog-test-prepare-publication-stops-before-query ()
@@ -1189,8 +1189,8 @@
               ((symbol-function 'org-roam-blog--static-files)
                (lambda ()
                  '((:source "/assets/index.html"
-                    :target "/public/index.html"
-                    :owner "static[0]"))))
+                            :target "/public/index.html"
+                            :owner "static[0]"))))
               ((symbol-function 'org-roam-blog--generated-output-plan)
                (lambda (_entries)
                  (list (org-roam-blog--plan-item 'sitemap
@@ -1205,7 +1205,7 @@
                     'failure))
         (should (string-match-p "Output conflict"
                                 (plist-get (car (plist-get result
-                                                         :diagnostics))
+                                                           :diagnostics))
                                            :message)))))))
 
 (ert-deftest org-roam-blog-test-publish-orders-stage-static-promote ()
@@ -1213,8 +1213,8 @@
     (cl-letf (((symbol-function 'org-roam-blog--prepare-publication)
                (lambda ()
                  '(:status success :entries (entry)
-                   :static (asset) :plan (plan)
-                   :diagnostics nil)))
+                           :static (asset) :plan (plan)
+                           :diagnostics nil)))
               ((symbol-function 'org-roam-blog--stage-generated-batch)
                (lambda (_entries)
                  (push 'stage events)
@@ -1227,7 +1227,7 @@
                (lambda (_staged)
                  (push 'promote events)
                  '(:status success :staging nil
-                   :promoted ("/public/index.html")))))
+                           :promoted ("/public/index.html")))))
       (let ((result (org-roam-blog--publish)))
         (should (eq (plist-get result
                                :status)
@@ -1244,16 +1244,16 @@
   (cl-letf (((symbol-function 'org-roam-blog--prepare-publication)
              (lambda ()
                '(:status success :entries nil :static (asset)
-                 :plan nil :diagnostics nil)))
+                         :plan nil :diagnostics nil)))
             ((symbol-function 'org-roam-blog--stage-generated-batch)
              (lambda (_entries)
                '(:status success :staging "/tmp/staging")))
             ((symbol-function 'org-roam-blog--publish-static-batch)
              (lambda (_records)
                '(:status failure :published ("/public/a.css")
-                 :diagnostics
-                 ((:severity error :subject static
-                   :message "copy failed")))))
+                         :diagnostics
+                         ((:severity error :subject static
+                                     :message "copy failed")))))
             ((symbol-function 'org-roam-blog--promote-generated-batch)
              (lambda (_staged)
                (ert-fail "Promotion must not run"))))
@@ -1283,23 +1283,23 @@
     (unwind-protect
         (progn (make-directory (file-name-directory source)
                                t)
-          (make-directory (file-name-directory target)
-                          t)
-          (write-region (concat "#+TITLE: Index\n\n"
-                                "[[file:../posts/post.org][File link]]\n")
-                        nil
-                        source
-                        nil
-                        'silent)
-          (org-roam-blog--export-content-entry entry
-                                               staging)
-          (should (file-regular-p output))
-          (with-temp-buffer
-            (insert-file-contents output)
-            (ert-info ((buffer-string))
-              (should (re-search-forward "href=\"\\.\\./posts/post\\.html\">File link"
-                                         nil
-                                         t)))))
+               (make-directory (file-name-directory target)
+                               t)
+               (write-region (concat "#+TITLE: Index\n\n"
+                                     "[[file:../posts/post.org][File link]]\n")
+                             nil
+                             source
+                             nil
+                             'silent)
+               (org-roam-blog--export-content-entry entry
+                                                    staging)
+               (should (file-regular-p output))
+               (with-temp-buffer
+                 (insert-file-contents output)
+                 (ert-info ((buffer-string))
+                   (should (re-search-forward "href=\"\\.\\./posts/post\\.html\">File link"
+                                              nil
+                                              t)))))
       (delete-directory root t))))
 
 (ert-deftest org-roam-blog-test-theindex-native-generation-and-state-isolation ()
@@ -1319,7 +1319,7 @@
          (outside-cache (make-hash-table :test #'equal))
          (outside-id-locations (make-hash-table :test #'equal))
          (outside-id-locations-file (expand-file-name "outside-id-locations"
-                                                       root))
+                                                      root))
          (outside-link-filter (lambda (output _backend _info)
                                 output))
          (org-publish-cache outside-cache)
