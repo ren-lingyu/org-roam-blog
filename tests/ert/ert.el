@@ -92,17 +92,90 @@
                    "https://example.org/blog/%E6%96%87%E7%AB%A0/a%20b.html"))))
 
 (ert-deftest org-roam-blog-test-variable-validation-accepts-minimum ()
-  (let ((org-roam-blog-directory "/tmp/source/")
-        (org-roam-blog-publish-directory "/tmp/public/")
-        (org-roam-blog-publish-store "_org")
-        (org-roam-blog-site-url nil)
-        (org-roam-blog-temporary-directory nil)
-        (org-roam-blog-export-default nil)
-        (org-roam-blog-content nil)
-        (org-roam-blog-static nil)
-        (org-roam-blog-sitemap (list :enable nil))
-        (org-roam-blog-theindex (list :enable nil)))
-    (should-not (org-roam-blog--validate-variables))))
+  (let* ((root (make-temp-file "org-roam-blog-variables-" t))
+         (source (expand-file-name "source"
+                                   root))
+         (publish (expand-file-name "public"
+                                    root))
+         (org-roam-blog-directory source)
+         (org-roam-blog-publish-directory publish)
+         (org-roam-blog-publish-store "_org")
+         (org-roam-blog-site-url nil)
+         (org-roam-blog-temporary-directory nil)
+         (org-roam-blog-export-default nil)
+         (org-roam-blog-content nil)
+         (org-roam-blog-static nil)
+         (org-roam-blog-sitemap (list :enable nil))
+         (org-roam-blog-theindex (list :enable nil)))
+    (unwind-protect
+        (progn (make-directory source)
+          (make-directory publish)
+          (should-not (org-roam-blog--validate-variables)))
+      (delete-directory root
+                        t))))
+
+(ert-deftest org-roam-blog-test-variable-validation-requires-existing-roots ()
+  (let* ((root (make-temp-file "org-roam-blog-missing-roots-" t))
+         (org-roam-blog-directory (expand-file-name "source"
+                                                    root))
+         (org-roam-blog-publish-directory (expand-file-name "public"
+                                                            root))
+         (org-roam-blog-publish-store "_org")
+         (org-roam-blog-site-url nil)
+         (org-roam-blog-temporary-directory (expand-file-name "staging"
+                                                              root))
+         (org-roam-blog-export-default nil)
+         (org-roam-blog-content nil)
+         (org-roam-blog-static nil)
+         (org-roam-blog-sitemap (list :enable nil))
+         (org-roam-blog-theindex (list :enable nil)))
+    (unwind-protect
+        (let ((diagnostics (org-roam-blog--validate-variables)))
+          (dolist (subject '(org-roam-blog-directory
+                             org-roam-blog-publish-directory
+                             org-roam-blog-temporary-directory))
+            (should (cl-find-if (lambda (diagnostic)
+                                  (eq (plist-get diagnostic
+                                                 :subject)
+                                      subject))
+                                diagnostics))))
+      (delete-directory root
+                        t))))
+
+(ert-deftest org-roam-blog-test-variable-validation-rejects-store-symlink ()
+  (let* ((root (make-temp-file "org-roam-blog-store-" t))
+         (source (expand-file-name "source"
+                                   root))
+         (publish (expand-file-name "public"
+                                    root))
+         (outside (expand-file-name "outside"
+                                    root))
+         (store (expand-file-name "_org"
+                                  publish))
+         (org-roam-blog-directory source)
+         (org-roam-blog-publish-directory publish)
+         (org-roam-blog-publish-store "_org")
+         (org-roam-blog-site-url nil)
+         (org-roam-blog-temporary-directory nil)
+         (org-roam-blog-export-default nil)
+         (org-roam-blog-content nil)
+         (org-roam-blog-static nil)
+         (org-roam-blog-sitemap (list :enable nil))
+         (org-roam-blog-theindex (list :enable nil)))
+    (unwind-protect
+        (progn (make-directory source)
+          (make-directory publish)
+          (make-directory outside)
+          (make-symbolic-link outside
+                              store)
+          (should (cl-find-if
+                   (lambda (diagnostic)
+                     (eq (plist-get diagnostic
+                                    :subject)
+                         'org-roam-blog-publish-store))
+                   (org-roam-blog--validate-variables))))
+      (delete-directory root
+                        t))))
 
 (ert-deftest org-roam-blog-test-variable-validation-reports-unknown-key ()
   (let ((org-roam-blog-directory "/tmp/source/")

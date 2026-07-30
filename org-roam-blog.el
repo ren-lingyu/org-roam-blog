@@ -50,43 +50,51 @@
 (require 'url-parse)
 (require 'url-util)
 
-(defgroup org-roam-blog nil
+(defgroup org-roam-blog
+  nil
   "Publish an Org-roam database selection as a static HTML blog."
   :group 'org-roam
   :prefix "org-roam-blog-")
 
-(defcustom org-roam-blog-directory nil
+(defcustom org-roam-blog-directory
+  nil
   "Root directory containing Org files eligible for blog publication.
 
 The Org-roam database is the only source used to select files.  This
 directory limits that selection and provides the base from which
-source-relative store paths are calculated.  The value must be an
-absolute directory name.  Org-roam Blog does not synchronize the
-Org-roam database."
+source-relative store paths are calculated.  The value must name an
+existing absolute directory and must not be a symbolic link.
+Org-roam Blog does not synchronize the Org-roam database."
   :type '(choice (const :tag "Not configured" nil)
                  directory)
   :group 'org-roam-blog)
 
-(defcustom org-roam-blog-publish-directory nil
+(defcustom org-roam-blog-publish-directory
+  nil
   "Root directory for all published website files.
 
 Content store files, redirects, sitemap, theindex, and static files
-must resolve below this directory.  The value must be an absolute
-directory name."
+must resolve below this directory.  The value must name an existing
+absolute directory and must not be a symbolic link.  Org-roam Blog
+does not create this publication root."
   :type '(choice (const :tag "Not configured" nil)
                  directory)
   :group 'org-roam-blog)
 
-(defcustom org-roam-blog-publish-store "_org"
+(defcustom org-roam-blog-publish-store
+  "_store"
   "Directory below `org-roam-blog-publish-directory' for content.
 
-The value is a non-empty relative directory name.  Published Org
-files mirror their paths relative to `org-roam-blog-directory' below
-this directory."
+The value is a non-empty relative directory name.  It may name a
+missing directory, which publication creates as needed.  When it
+already exists, it must be a non-symlink directory below
+`org-roam-blog-publish-directory'.  Published Org files mirror their
+paths relative to `org-roam-blog-directory' below this directory."
   :type 'string
   :group 'org-roam-blog)
 
-(defcustom org-roam-blog-site-url nil
+(defcustom org-roam-blog-site-url
+  nil
   "Absolute public URL corresponding to the publish directory.
 
 The value may be nil when the final website URL is unknown.  A
@@ -101,18 +109,22 @@ as canonical metadata or a future feed."
                  string)
   :group 'org-roam-blog)
 
-(defcustom org-roam-blog-temporary-directory nil
+(defcustom org-roam-blog-temporary-directory
+  nil
   "Parent directory for per-publication staging directories.
 
-Nil means to use `temporary-file-directory'.  A non-nil value must be
-an absolute directory name.  Each publication creates a unique child
-directory for generated content, sitemap, theindex, and redirects.
-Static files do not pass through this staging directory."
+Nil means to use `temporary-file-directory'.  A non-nil value must
+name an existing absolute directory and must not be a symbolic link.
+Org-roam Blog does not create this staging root.  Each publication
+creates a unique child directory for generated content, sitemap,
+theindex, and redirects.  Static files do not pass through this
+staging directory."
   :type '(choice (const :tag "Emacs temporary directory" nil)
                  directory)
   :group 'org-roam-blog)
 
-(defcustom org-roam-blog-export-default nil
+(defcustom org-roam-blog-export-default
+  nil
   "Default configuration applied to generated Org documents.
 
 The supported schema is:
@@ -146,7 +158,8 @@ context and referenced configuration data as read-only."
   :type 'plist
   :group 'org-roam-blog)
 
-(defcustom org-roam-blog-published-property "PUBLISHED"
+(defcustom org-roam-blog-published-property
+  "PUBLISHED"
   "Org-roam node property containing the publication time.
 
 The value is a non-empty property name.  Org-roam Blog reads this
@@ -157,7 +170,8 @@ actually deployed."
   :type 'string
   :group 'org-roam-blog)
 
-(defcustom org-roam-blog-content nil
+(defcustom org-roam-blog-content
+  nil
   "Rules selecting Org-roam files and describing their publication.
 
 Each element is a plist with this schema:
@@ -179,7 +193,8 @@ and will be diagnosed before publication."
   :type '(repeat plist)
   :group 'org-roam-blog)
 
-(defcustom org-roam-blog-static nil
+(defcustom org-roam-blog-static
+  nil
   "Mappings of static source directories to publication directories.
 
 Each element has the form:
@@ -247,10 +262,12 @@ required."
 (defconst org-roam-blog--theindex-keys
   '(:enable :path :title :template :bindings :body))
 
-(defvar org-roam-blog--body-context nil
+(defvar org-roam-blog--body-context
+  nil
   "Base context for the current Org-roam Blog body pipeline.")
 
-(defvar org-roam-blog--body-functions nil
+(defvar org-roam-blog--body-functions
+  nil
   "Body functions for the current Org-roam Blog export.")
 
 (defun org-roam-blog--diagnostic (severity subject message)
@@ -305,6 +322,12 @@ The directory need not exist."
   (and (stringp value)
        (not (string-empty-p value))
        (file-name-absolute-p value)))
+
+(defun org-roam-blog--existing-real-directory-p (value)
+  "Return non-nil when VALUE names an existing non-symlink directory."
+  (and (org-roam-blog--absolute-directory-p value)
+       (file-directory-p value)
+       (not (file-symlink-p (directory-file-name (expand-file-name value))))))
 
 (defun org-roam-blog--relative-path-p (value &optional allow-dot)
   "Return non-nil when VALUE is a safe relative path.
@@ -1598,16 +1621,31 @@ synchronize Org-roam, or repair configuration."
   (let (diagnostics)
     (dolist (entry `((org-roam-blog-directory . ,org-roam-blog-directory)
                      (org-roam-blog-publish-directory . ,org-roam-blog-publish-directory)))
-      (unless (org-roam-blog--absolute-directory-p (cdr entry))
+      (unless (org-roam-blog--existing-real-directory-p (cdr entry))
         (push (org-roam-blog--diagnostic 'error
                                          (car entry)
-                                         "Value must be an absolute directory.")
+                                         (concat "Value must name an existing absolute directory "
+                                                 "and must not be a symbolic link."))
               diagnostics)))
-    (unless (org-roam-blog--relative-path-p org-roam-blog-publish-store)
-      (push (org-roam-blog--diagnostic 'error
-                                       'org-roam-blog-publish-store
-                                       "Value must be a non-empty safe relative directory.")
-            diagnostics))
+    (if (not (org-roam-blog--relative-path-p org-roam-blog-publish-store))
+        (push (org-roam-blog--diagnostic 'error
+                                         'org-roam-blog-publish-store
+                                         "Value must be a non-empty safe relative directory.")
+              diagnostics)
+      (when (org-roam-blog--existing-real-directory-p org-roam-blog-publish-directory)
+        (let ((store (expand-file-name org-roam-blog-publish-store
+                                       org-roam-blog-publish-directory)))
+          (when (or (file-exists-p store)
+                    (file-symlink-p store))
+            (unless (and (file-directory-p store)
+                         (not (file-symlink-p store))
+                         (file-in-directory-p store
+                                              org-roam-blog-publish-directory))
+              (push (org-roam-blog--diagnostic 'error
+                                               'org-roam-blog-publish-store
+                                               (concat "An existing store must be a non-symlink "
+                                                       "directory below the publication directory."))
+                    diagnostics))))))
     (unless (org-roam-blog--valid-site-url-p org-roam-blog-site-url)
       (push (org-roam-blog--diagnostic 'error
                                        'org-roam-blog-site-url
@@ -1615,11 +1653,12 @@ synchronize Org-roam, or repair configuration."
                                                "in / without query or fragment."))
             diagnostics))
     (unless (or (null org-roam-blog-temporary-directory)
-                (org-roam-blog--absolute-directory-p
+                (org-roam-blog--existing-real-directory-p
                  org-roam-blog-temporary-directory))
       (push (org-roam-blog--diagnostic 'error
                                        'org-roam-blog-temporary-directory
-                                       "Value must be nil or an absolute directory.")
+                                       (concat "Value must be nil or name an existing absolute "
+                                               "non-symlink directory."))
             diagnostics))
     (setq diagnostics
           (org-roam-blog--validate-known-plist org-roam-blog-export-default
