@@ -217,23 +217,27 @@ configuration check validates only this option's schema."
 
 The supported schema is:
 
-  (:enable BOOLEAN :path RELATIVE-FILE :title STRING
+  (:enable BOOLEAN :path RELATIVE-FILE :preamble STRING-OR-NIL
    :sort SYMBOL-OR-NIL
    :visible-tags TAGS-OR-NIL
-   :generator FUNCTION-OR-NIL :template PLIST :bindings ALIST
+   :renderer FUNCTION-OR-NIL :template PLIST :bindings ALIST
    :body FUNCTION-LIST)
 
 Only tags explicitly listed in `:visible-tags' are displayed by the
 sitemap.  A missing or nil value displays no tags.  This whitelist
-never selects content.  TITLE defaults to \"Sitemap\".  SORT is nil
-or `anti-chronologically'; the latter orders parseable publication
-times newest first and retains stable manifest order otherwise.
+never selects content.  SORT is nil or `anti-chronologically'; the
+latter orders parseable publication times newest first and retains
+stable manifest order otherwise.
 
-When non-nil, `:generator' receives one plist containing `:entries'
-and `:config', and must return a complete Org source string.  The
-entries have already been selected, sorted, and projected through
-`:visible-tags'.  An empty returned string is valid.  TEMPLATE,
-BINDINGS, and BODY extend `org-roam-blog-export-default'."
+PREAMBLE is optional Org source inserted before the rendered sitemap
+fragment.  RENDERER is nil or a function; nil selects the default
+renderer.  The renderer receives one plist containing `:entries' and
+`:config', and must return an Org source fragment string.  The
+fragment may include supporting document keywords such as
+`#+HTML_HEAD_EXTRA'.  The entries have already been selected, sorted,
+and projected through `:visible-tags'.  An empty returned string is
+valid.  TEMPLATE, BINDINGS, and BODY extend
+`org-roam-blog-export-default'."
   :type 'plist
   :group 'org-roam-blog)
 
@@ -243,7 +247,7 @@ BINDINGS, and BODY extend `org-roam-blog-export-default'."
 
 The supported schema is:
 
-  (:enable BOOLEAN :path RELATIVE-FILE :title STRING
+  (:enable BOOLEAN :path RELATIVE-FILE :preamble STRING-OR-NIL
    :template PLIST :bindings ALIST :body FUNCTION-LIST)
 
 When disabled, capabilities needed only for index collection are not
@@ -257,9 +261,12 @@ The generated Org source and include file are private staging
 artifacts.  The final HTML file is written at `:path'.  Links generated
 from real source paths are mapped to their corresponding publication
 store URLs by a local HTML link filter; fragments remain under Org's
-control.  TEMPLATE, BINDINGS, and BODY extend
-`org-roam-blog-export-default'.  No advice, symbolic links, persistent
-Publish cache, or global Publish project registration is used."
+control.  PREAMBLE is optional Org source inserted before the native
+`theindex.inc' include.  It may contain `#+TITLE' and other document
+keywords or elements; Org-roam Blog does not interpret its contents.
+TEMPLATE, BINDINGS, and BODY extend `org-roam-blog-export-default'.
+No advice, symbolic links, persistent Publish cache, or global
+Publish project registration is used."
   :type 'plist
   :group 'org-roam-blog)
 
@@ -277,10 +284,10 @@ Publish cache, or global Publish project registration is used."
   "Default regexp matching static file extensions.")
 
 (defconst org-roam-blog--sitemap-keys
-  '(:enable :path :title :sort :visible-tags :generator :template :bindings :body))
+  '(:enable :path :preamble :sort :visible-tags :renderer :template :bindings :body))
 
 (defconst org-roam-blog--theindex-keys
-  '(:enable :path :title :template :bindings :body))
+  '(:enable :path :preamble :template :bindings :body))
 
 (defvar org-roam-blog--body-context
   nil
@@ -1220,8 +1227,8 @@ redirect file."
                             t
                             t))
 
-(defun org-roam-blog--sitemap-default-generator (context)
-  "Return default Org sitemap content for CONTEXT.
+(defun org-roam-blog--sitemap-default-renderer (context)
+  "Return the default Org sitemap fragment for CONTEXT.
 
 Display each entry's `:published-time' value when present.  The
 filesystem `:modified-time' remains manifest metadata and is not
@@ -1231,69 +1238,68 @@ included in the default sitemap."
          (config (plist-get context
                             :config))
          (path (plist-get config
-                          :path))
-         (title (or (plist-get config
-                               :title)
-                    "Sitemap")))
-    (concat "#+TITLE: "
-            (replace-regexp-in-string "[\n\r]+"
-                                      " "
-                                      title
-                                      t
-                                      t)
-            "\n\n"
-            (mapconcat (lambda (entry)
-                         (let* ((url (org-roam-blog--relative-url path
-                                                                  (plist-get entry
-                                                                             :store-relative)))
-                                (description (org-roam-blog--sitemap-link-description (or (plist-get entry
-                                                                                                     :title)
-                                                                                          (plist-get entry
-                                                                                                     :source-relative))))
-                                (published (plist-get entry
-                                                      :published-time))
-                                (tags (plist-get entry
-                                                 :tags)))
-                           (concat "- [[file:" url "][" description "]]"
-                                   (when published
-                                     (concat " "
-                                             (replace-regexp-in-string "[\n\r]+"
-                                                                       " "
-                                                                       published
-                                                                       t
-                                                                       t)))
-                                   (when tags
-                                     (concat " ("
-                                             (mapconcat #'org-roam-blog--sitemap-link-description
-                                                        tags
-                                                        ", ")
-                                             ")")))))
-                       entries
-                       "\n")
-            (when entries "\n"))))
+                          :path)))
+    (concat
+     (mapconcat (lambda (entry)
+                  (let* ((url (org-roam-blog--relative-url path
+                                                           (plist-get entry
+                                                                      :store-relative)))
+                         (description (org-roam-blog--sitemap-link-description (or (plist-get entry
+                                                                                              :title)
+                                                                                   (plist-get entry
+                                                                                              :source-relative))))
+                         (published (plist-get entry
+                                               :published-time))
+                         (tags (plist-get entry
+                                          :tags)))
+                    (concat "- [[file:" url "][" description "]]"
+                            (when published
+                              (concat " "
+                                      (replace-regexp-in-string "[\n\r]+"
+                                                                " "
+                                                                published
+                                                                t
+                                                                t)))
+                            (when tags
+                              (concat " ("
+                                      (mapconcat #'org-roam-blog--sitemap-link-description
+                                                 tags
+                                                 ", ")
+                                      ")")))))
+                entries
+                "\n")
+     (when entries "\n"))))
 
 (defun org-roam-blog--sitemap-source (entries)
   "Return Org sitemap source for manifest ENTRIES.
 
-The configured generator receives one plist containing `:entries'
-and `:config'.  Entries have already been filtered, sorted, and had
-their displayed tags projected.  The generator must return a complete
-Org source string.  Entries retain both `:published-time' and
-filesystem `:modified-time' metadata; the default generator only
-displays `:published-time'."
+The configured renderer receives one plist containing `:entries' and
+`:config'.  Entries have already been filtered, sorted, and had their
+displayed tags projected.  The renderer must return an Org source
+fragment string.  Prefix it with the configured `:preamble'.  Entries
+retain both `:published-time' and filesystem `:modified-time'
+metadata; the default renderer only displays `:published-time'."
   (let* ((config org-roam-blog-sitemap)
          (prepared (org-roam-blog--sitemap-prepare-entries entries
                                                            config))
-         (generator (or (plist-get config
-                                   :generator)
-                        #'org-roam-blog--sitemap-default-generator))
+         (preamble (plist-get config
+                              :preamble))
+         (renderer (or (plist-get config
+                                  :renderer)
+                       #'org-roam-blog--sitemap-default-renderer))
          (context (list :entries prepared
                         :config config))
-         (source (funcall generator
-                          context)))
-    (unless (stringp source)
-      (error "Sitemap generator must return a string"))
-    source))
+         (fragment (funcall renderer
+                            context)))
+    (unless (stringp fragment)
+      (error "Sitemap renderer must return a string"))
+    (concat (when (and preamble
+                       (not (string-empty-p preamble)))
+              (concat preamble
+                      (unless (string-suffix-p "\n"
+                                               preamble)
+                        "\n")))
+            fragment)))
 
 (defun org-roam-blog--sitemap-stage (entries staging)
   "Generate and stage the configured sitemap from manifest ENTRIES.
@@ -1393,14 +1399,19 @@ relative to RELATIVE."
 
 WORK-DIRECTORY is private build state.  CONFIG is the validated
 `org-roam-blog-theindex' plist.  The source delegates index content
-to the native generator's `theindex.inc' file."
+to the native generator's `theindex.inc' file.  Insert a configured
+`:preamble' verbatim before that include."
   (let ((source (expand-file-name "theindex.org"
                                   work-directory))
-        (title (or (plist-get config
-                              :title)
-                   "Index")))
-    (write-region (format "#+TITLE: %s\n\n#+INCLUDE: \"theindex.inc\"\n"
-                          title)
+        (preamble (plist-get config
+                             :preamble)))
+    (write-region (concat (when (and preamble
+                                     (not (string-empty-p preamble)))
+                            (concat preamble
+                                    (unless (string-suffix-p "\n"
+                                                             preamble)
+                                      "\n")))
+                          "#+INCLUDE: \"theindex.inc\"\n")
                   nil
                   source
                   nil
@@ -1843,12 +1854,14 @@ is non-nil."
                                              "Enabled sitemap requires a safe relative :path.")
                   diagnostics)))
         (when (and (plist-member org-roam-blog-sitemap
-                                 :title)
-                   (not (stringp (plist-get org-roam-blog-sitemap
-                                            :title))))
+                                 :preamble)
+                   (let ((preamble (plist-get org-roam-blog-sitemap
+                                              :preamble)))
+                     (not (or (null preamble)
+                              (stringp preamble)))))
           (push (org-roam-blog--diagnostic 'error
                                            subject
-                                           "The :title field must be a string.")
+                                           "The :preamble field must be nil or a string.")
                 diagnostics))
         (when (and (plist-member org-roam-blog-sitemap
                                  :sort)
@@ -1869,14 +1882,14 @@ is non-nil."
                                            "The :visible-tags field must be nil or a string list.")
                 diagnostics))
         (when (and (plist-member org-roam-blog-sitemap
-                                 :generator)
-                   (let ((generator (plist-get org-roam-blog-sitemap
-                                               :generator)))
-                     (not (or (null generator)
-                              (functionp generator)))))
+                                 :renderer)
+                   (let ((renderer (plist-get org-roam-blog-sitemap
+                                              :renderer)))
+                     (not (or (null renderer)
+                              (functionp renderer)))))
           (push (org-roam-blog--diagnostic 'error
                                            subject
-                                           "The :generator field must be nil or a function.")
+                                           "The :renderer field must be nil or a function.")
                 diagnostics))
         (when (and (plist-member org-roam-blog-sitemap
                                  :template)
@@ -1931,12 +1944,14 @@ is non-nil."
                                            "Enabled theindex requires a safe relative :path.")
                 diagnostics))
         (when (and (plist-member org-roam-blog-theindex
-                                 :title)
-                   (not (stringp (plist-get org-roam-blog-theindex
-                                            :title))))
+                                 :preamble)
+                   (let ((preamble (plist-get org-roam-blog-theindex
+                                              :preamble)))
+                     (not (or (null preamble)
+                              (stringp preamble)))))
           (push (org-roam-blog--diagnostic 'error
                                            subject
-                                           "The :title field must be a string.")
+                                           "The :preamble field must be nil or a string.")
                 diagnostics))
         (when (and (plist-member org-roam-blog-theindex
                                  :template)

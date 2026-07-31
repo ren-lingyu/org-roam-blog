@@ -377,17 +377,72 @@
       (should-not (plist-get capability
                              :available)))))
 
-(ert-deftest org-roam-blog-test-theindex-validates-title ()
-  (let* ((org-roam-blog-theindex (list :enable t
-                                       :path "theindex.html"
-                                       :title 1))
+(ert-deftest org-roam-blog-test-theindex-validates-preamble ()
+  (dolist (preamble (list nil
+                          ""
+                          "#+DESCRIPTION: Index"))
+    (let ((org-roam-blog-theindex (list :enable nil
+                                        :preamble preamble)))
+      (should-not (org-roam-blog--validate-theindex nil))))
+  (let* ((org-roam-blog-theindex (list :enable nil
+                                       :preamble 1))
          (diagnostics (org-roam-blog--validate-theindex nil)))
     (should (cl-find-if
              (lambda (diagnostic)
-               (string-match-p ":title field must be a string"
+               (string-match-p ":preamble field must be nil or a string"
                                (plist-get diagnostic
                                           :message)))
              diagnostics))))
+
+(ert-deftest org-roam-blog-test-theindex-rejects-removed-title-field ()
+  (let* ((org-roam-blog-theindex (list :enable nil
+                                       :title "Index"))
+         (diagnostics (org-roam-blog--validate-theindex nil)))
+    (should (cl-find-if
+             (lambda (diagnostic)
+               (string-match-p "Unknown key: :title"
+                               (plist-get diagnostic
+                                          :message)))
+             diagnostics))))
+
+(ert-deftest org-roam-blog-test-theindex-source-inserts-preamble ()
+  (let* ((directory (make-temp-file "org-roam-blog-theindex-source-" t))
+         (preamble (concat "#+DESCRIPTION: Native index\n"
+                           "#+BEGIN_abstract\n"
+                           "Index abstract.\n"
+                           "#+END_abstract"))
+         source)
+    (unwind-protect
+        (progn
+          (setq source
+                (org-roam-blog--theindex-source
+                 directory
+                 (list :preamble preamble)))
+          (with-temp-buffer
+            (insert-file-contents source)
+            (should
+             (equal (buffer-string)
+                    (concat preamble
+                            "\n#+INCLUDE: \"theindex.inc\"\n")))))
+      (delete-directory directory
+                        t))))
+
+(ert-deftest org-roam-blog-test-theindex-source-without-preamble-is-native-include ()
+  (let* ((directory (make-temp-file "org-roam-blog-theindex-source-" t))
+         source)
+    (unwind-protect
+        (progn
+          (setq source
+                (org-roam-blog--theindex-source
+                 directory
+                 (list)))
+          (with-temp-buffer
+            (insert-file-contents source)
+            (should
+             (equal (buffer-string)
+                    "#+INCLUDE: \"theindex.inc\"\n"))))
+      (delete-directory directory
+                        t))))
 
 (ert-deftest org-roam-blog-test-theindex-capabilities-are-conditional ()
   (cl-letf (((symbol-function 'org-publish-collect-index) nil)
@@ -515,21 +570,50 @@
                                                        :message)))
                           diagnostics)))))
 
-(ert-deftest org-roam-blog-test-sitemap-validates-title-and-sort ()
+(ert-deftest org-roam-blog-test-sitemap-validates-preamble-and-sort ()
   (dolist (config (list (list :enable nil
-                              :title "Posts"
+                              :preamble "#+TITLE: Posts"
                               :sort nil)
                         (list :enable nil
                               :sort 'anti-chronologically)))
     (let ((org-roam-blog-sitemap config))
       (should-not (org-roam-blog--validate-sitemap nil))))
   (dolist (config (list (list :enable nil
-                              :title 1)
+                              :preamble 1)
                         (list :enable nil
                               :sort 'alphabetically)))
     (let* ((org-roam-blog-sitemap config)
            (diagnostics (org-roam-blog--validate-sitemap nil)))
       (should diagnostics))))
+
+(ert-deftest org-roam-blog-test-sitemap-validates-renderer ()
+  (dolist (renderer (list nil
+                          #'identity))
+    (let ((org-roam-blog-sitemap (list :enable nil
+                                       :renderer renderer)))
+      (should-not (org-roam-blog--validate-sitemap nil))))
+  (let* ((org-roam-blog-sitemap (list :enable nil
+                                      :renderer 1))
+         (diagnostics (org-roam-blog--validate-sitemap nil)))
+    (should (cl-find-if
+             (lambda (diagnostic)
+               (string-match-p ":renderer field must be nil or a function"
+                               (plist-get diagnostic
+                                          :message)))
+             diagnostics))))
+
+(ert-deftest org-roam-blog-test-sitemap-rejects-removed-rendering-fields ()
+  (dolist (key '(:title :generator))
+    (let* ((org-roam-blog-sitemap (list :enable nil
+                                        key nil))
+           (diagnostics (org-roam-blog--validate-sitemap nil)))
+      (should (cl-find-if
+               (lambda (diagnostic)
+                 (string-match-p (format "Unknown key: %S"
+                                         key)
+                                 (plist-get diagnostic
+                                            :message)))
+               diagnostics)))))
 
 (ert-deftest org-roam-blog-test-query-rule-nodes-matches-all-tags ()
   (let ((nodes (list (org-roam-node-create
@@ -1003,9 +1087,8 @@
                            prepared)
                    '("Newer" "Older" "Undated")))))
 
-(ert-deftest org-roam-blog-test-sitemap-default-generator-uses-relative-urls ()
+(ert-deftest org-roam-blog-test-sitemap-default-renderer-uses-relative-urls ()
   (let* ((config (list :path "pages/sitemap.html"
-                       :title "Posts"
                        :visible-tags '("emacs")))
          (entries (list (list :title "Post"
                               :source-relative "post.org"
@@ -1016,7 +1099,7 @@
                               :sitemap t)))
          (prepared (org-roam-blog--sitemap-prepare-entries entries
                                                            config))
-         (content (org-roam-blog--sitemap-default-generator
+         (content (org-roam-blog--sitemap-default-renderer
                    (list :entries prepared
                          :config config))))
     (should (string-match-p "\\[\\[file:\\.\\./_org/id/post\\.html\\]\\[Post\\]\\]"
@@ -1028,31 +1111,32 @@
     (should (string-match-p "(emacs)" content))
     (should-not (string-match-p "blog" content))))
 
-(ert-deftest org-roam-blog-test-sitemap-generator-receives-prepared ()
+(ert-deftest org-roam-blog-test-sitemap-renderer-receives-prepared ()
   (let* ((received nil)
          (org-roam-blog-sitemap (list :enable t
                                       :path "sitemap.html"
+                                      :preamble "#+TITLE: Custom\n"
                                       :visible-tags '("emacs")
-                                      :generator
+                                      :renderer
                                       (lambda (context)
                                         (setq received context)
-                                        "#+TITLE: Custom\n"))))
+                                        "- Rendered\n"))))
     (should (equal (org-roam-blog--sitemap-source (list (list :title "Post"
                                                               :store-relative "_org/post.html"
                                                               :tags '("blog" "emacs")
                                                               :sitemap t)))
-                   "#+TITLE: Custom\n"))
+                   "#+TITLE: Custom\n- Rendered\n"))
     (should (equal (plist-get (car (plist-get received
                                               :entries))
                               :tags)
                    '("emacs")))))
 
-(ert-deftest org-roam-blog-test-sitemap-generator-must-return-string ()
+(ert-deftest org-roam-blog-test-sitemap-renderer-must-return-string ()
   (let ((org-roam-blog-sitemap
          (list :enable t
                :path "sitemap.html"
-               :generator (lambda (_context)
-                            nil))))
+               :renderer (lambda (_context)
+                           nil))))
     (should-error (org-roam-blog--sitemap-source nil)
                   :type 'error)))
 
@@ -1072,7 +1156,7 @@
          (org-html-head "outside-head")
          (org-roam-blog-sitemap (list :enable t
                                       :path "sitemap.html"
-                                      :title "Posts"
+                                      :preamble "#+TITLE: Posts\n"
                                       :sort 'anti-chronologically
                                       :visible-tags nil
                                       :bindings (list (cons 'org-html-head
@@ -1413,7 +1497,7 @@
          (org-roam-blog-theindex
           (list :enable t
                 :path "indices/theindex.html"
-                :title "Native Index"
+                :preamble "#+TITLE: Native Index\n"
                 :body
                 (list (lambda (context)
                         (setq theindex-context context)

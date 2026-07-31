@@ -57,7 +57,7 @@ The package includes the following main features:
 - Include entries selected by each content rule's =:sitemap= field
 - Sort entries anti-chronologically by an explicitly managed publication property
 - Display only tags named by the sitemap's visible-tag whitelist
-- Support a custom generator for producing the intermediate Org sitemap source
+- Support a custom renderer for producing the sitemap body as Org source
 - Apply sitemap-specific export bindings, templates, and body functions
 
 ** 5. Native Org Index Generation
@@ -220,7 +220,7 @@ Each content rule, sitemap configuration, and theindex configuration accepts a =
 
 Binding values are ordinary configured values, not forms evaluated by Org-roam-blog. Construct dynamic strings and hook lists when building the configuration. Static-resource copying and redirect generation do not invoke the Org exporter and therefore do not use export bindings.
 
-For sitemap export, the binding scope includes both =:generator= and =org-export-to-file=. A sitemap generator may therefore update an exporter variable that is explicitly present in the effective bindings, such as =org-html-head-extra=, for that sitemap export without changing its global value.
+For sitemap export, the binding scope includes both =:renderer= and =org-export-to-file=. Prefer returning page-specific Org keywords such as =#+HTML_HEAD_EXTRA= from the renderer instead of mutating exporter variables.
 
 * Body Functions
 The =:body= field provides a package-level transformation stage without requiring a user function to dispatch on the concrete export backend. Default functions in =org-roam-blog-export-default= run first, followed by the functions configured for the current content rule, sitemap, or theindex. Each function receives one context plist and must return the replacement body string:
@@ -277,7 +277,9 @@ The default sitemap displays the publication property when present. With anti-ch
   (setq org-roam-blog-sitemap
         (list :enable t
               :path "sitemap.html"
-              :title "Posts"
+              :preamble
+              (concat "#+TITLE: Posts\n"
+                      "#+DESCRIPTION: Published posts\n")
               :sort 'anti-chronologically
               :visible-tags '("emacs" "lisp")))
 #+END_SRC
@@ -286,23 +288,23 @@ The supported fields are:
 
 - =:enable= is a boolean.
 - =:path= is the complete output file path relative to =org-roam-blog-publish-directory= and is required when enabled.
-- =:title= customizes the sitemap title; the default is =Sitemap=.
+- =:preamble= is nil or static Org source placed before the rendered sitemap fragment. It may contain =#+TITLE=, metadata keywords, abstracts, or other introductory elements.
 - =:sort= is nil or =anti-chronologically=. The latter sorts parseable publication times newest first; undated entries retain their manifest order after dated entries.
 - =:visible-tags= is a display whitelist. Only explicitly listed tags are retained; a missing value, an empty list, or nil displays no tags.
-- =:generator= optionally replaces the default intermediate Org source generator.
+- =:renderer= optionally replaces the default renderer for prepared sitemap entries.
 - =:template= shallowly overrides the default export template for sitemap export.
 - =:bindings= overrides the default export bindings for sitemap source generation and export.
 - =:body= appends sitemap body functions after the defaults.
 
-A custom generator is called as:
+A custom renderer is called as:
 
 #+BEGIN_SRC emacs-lisp
-  (funcall generator
+  (funcall renderer
            (list :entries entries
                  :config config))
 #+END_SRC
 
-The context =:entries= have already been filtered by content-rule =:sitemap= fields, sorted, and projected through =:visible-tags=. Each entry retains its manifest metadata, including =:published-time= and =:modified-time=. =:config= is the validated sitemap plist. The generator must return a complete Org source string; an empty string is valid. Org-roam-blog still exports and writes the resulting sitemap.
+The context =:entries= have already been filtered by content-rule =:sitemap= fields, sorted, and projected through =:visible-tags=. Each entry retains its manifest metadata, including =:published-time= and =:modified-time=. =:config= is the validated sitemap plist. The renderer must return an Org source fragment string; an empty string is valid. It may include supporting keywords such as =#+HTML_HEAD_EXTRA=. Org-roam-blog prefixes =:preamble=, then exports and writes the resulting sitemap.
 
 For example:
 
@@ -310,17 +312,13 @@ For example:
   (setq org-roam-blog-sitemap
         (list :enable t
               :path "sitemap.html"
+              :preamble "#+TITLE: Posts\n"
               :visible-tags nil
-              :generator
+              :renderer
               (lambda (context)
                 (let ((entries (plist-get context
-                                          :entries))
-                      (config (plist-get context
-                                         :config)))
-                  (format "#+TITLE: %s\n\nPublished entries: %d\n"
-                          (or (plist-get config
-                                         :title)
-                              "Sitemap")
+                                          :entries)))
+                  (format "Published entries: %d\n"
                           (length entries))))))
 #+END_SRC
 
@@ -331,7 +329,12 @@ For example:
   (setq org-roam-blog-theindex
         (list :enable t
               :path "theindex.html"
-              :title "Index"
+              :preamble
+              (concat "#+TITLE: Index\n"
+                      "#+DESCRIPTION: Site index\n"
+                      "#+BEGIN_abstract\n"
+                      "Entries grouped by index term.\n"
+                      "#+END_abstract\n")
               :template (list :with-toc nil
                               :section-numbers nil)))
 #+END_SRC
@@ -342,12 +345,12 @@ The supported fields are:
 
 - =:enable= explicitly enables or disables generation.
 - =:path= is the final HTML file relative to the publication root and may name a nested path.
-- =:title= is the generated Org document title; the default is =Index=.
+- =:preamble= is nil or an Org source string inserted before the native =theindex.inc= include. It may contain =#+TITLE=, metadata keywords, blocks, or other Org elements; the package does not parse or reinterpret it.
 - =:template= shallowly overrides the default export template.
 - =:bindings= overrides default dynamic export bindings.
 - =:body= appends theindex body functions after the defaults.
 
-The package collects index data while exporting selected content into one dynamically bound in-memory Org Publish cache. It then asks the native generator to create private =theindex.org= and =theindex.inc= staging files. These files, the temporary timestamp directory, and the private Publish project are never registered globally or promoted.
+The package collects index data while exporting selected content into one dynamically bound in-memory Org Publish cache. It then asks the native generator to create private =theindex.org= and =theindex.inc= staging files. A configured =:preamble= becomes part of =theindex.org= and therefore passes through normal Org parsing and export. These files, the temporary timestamp directory, and the private Publish project are never registered globally or promoted.
 
 Native index links initially refer to the real source files. During only the final theindex HTML export, an internal link filter maps exact source hrefs to their publication-store URLs and preserves fragments generated by Org. Existing user link filters run first. The internal filter does not rewrite unrelated links, install advice, create symbolic links, or modify global filter state.
 
@@ -445,13 +448,13 @@ The following example publishes index-tagged content through redirects at the we
     (org-roam-blog-sitemap
      (list :enable t
            :path "sitemap.html"
-           :title "Posts"
+           :preamble "#+TITLE: Posts\n"
            :sort 'anti-chronologically
            :visible-tags '("emacs" "lisp")))
     (org-roam-blog-theindex
      (list :enable t
            :path "theindex.html"
-           :title "Index")))
+           :preamble "#+TITLE: Index\n")))
 #+END_SRC
 
 Run =org-roam-blog-check= after changing the configuration and synchronize Org-roam before publishing saved content.
