@@ -3,12 +3,16 @@
   pkgs.runCommand "org-roam-blog-ert" {
     nativeBuildInputs = [
       emacs
+      pkgs.guile
     ];
-  } (builtins.concatStringsSep "\n" [
-    "export HOME=\"$TMPDIR/home\""
-    "mkdir -p \"$HOME\""
-    "${pkgs.lib.getExe' emacs "emacs"} -Q --batch --load ${./ert.el} --funcall ert-run-tests-batch-and-exit"
-    "touch \"$out\""
-  ])
+  } (pkgs.replaceVarsWith {
+    src = ./run.scm;
+    isExecutable = true;
+    replacements = {
+      guile = pkgs.lib.getExe pkgs.guile;
+      emacs = pkgs.lib.getExe' emacs "emacs";
+      testFile = "${./ert.el}";
+    };
+  })
 
 )

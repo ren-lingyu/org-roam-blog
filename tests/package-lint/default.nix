@@ -3,14 +3,16 @@
   pkgs.runCommand "org-roam-blog-package-lint" {
     nativeBuildInputs = [
       emacs
+      pkgs.guile
     ];
-  } (builtins.concatStringsSep "\n" [
-    "export HOME=\"$TMPDIR/home\""
-    "mkdir -p \"$HOME\""
-    "mapfile -d \"\" elispFiles < <(find -L ${source} -type f -name \"*.el\" -print0)"
-    "test \"\${#elispFiles[@]}\" -gt 0"
-    "${pkgs.lib.getExe' emacs "emacs"} -Q --batch -L ${source} --load package-lint --funcall package-lint-batch-and-exit \"\${elispFiles[@]}\""
-    "touch \"$out\""
-  ])
+  } (pkgs.replaceVarsWith {
+    src = ./run.scm;
+    isExecutable = true;
+    replacements = {
+      guile = pkgs.lib.getExe pkgs.guile;
+      emacs = pkgs.lib.getExe' emacs "emacs";
+      source = "${source}";
+    };
+  })
 
 )
