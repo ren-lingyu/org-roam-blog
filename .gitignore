@@ -18,6 +18,7 @@
 !tests/**/
 !tests/**/*.el
 !tests/**/*.nix
+!tests/**/*.scm
 
 *~
 *#
