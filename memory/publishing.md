@@ -62,7 +62,7 @@ does not install a generalized rewrite/workaround for ordinary content links.
 Keep that distinct from the later concept-index integration problem.
 
 Native theindex generation is implemented; see `memory/index.md`.
-Public-driver enablement and release closure are still pending at this point.
+The public driver now permits generation and promotion of theindex output.
 
 ## Sitemap display and roots
 

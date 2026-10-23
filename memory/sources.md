@@ -7,15 +7,14 @@ The original Codex discussion is session
 Record numbers below are one-based JSONL record positions in that source.
 They locate evidence; they are not a replay log or checkpoint identifiers.
 
-Covered scope at this recovery point: native generator/filter decision, probes, implementation and exact implementation-commit review.
+Covered scope at this recovery point: headline-ID regression, actual theindex publication and v0.1.0 candidate preflight/documentation.
 
-Records 5213–5394 replace the shadow approach with native generation
-plus a scoped post-transcoding mapper and validate its boundaries. Records
-5404–5593 cover implementation and commit review; 5540 reports 6 focused
-and 58 full ERT. Tool output at 5585 explicitly identifies the reviewed HEAD
-as `afb87383fe95ef98dcd2d355a36d65965d8d5d93`, with README still unstaged.
-This supports the code implementation review context, not a claim that the
-unstaged documentation or every earlier experiment equals that commit.
+Records 5599–5766 add ID coverage, exercise actual publication and
+remove the driver blocker. At 5799 the user reports output parity with the
+prior personal configuration. Records 5811–6040 finish preflight, capability
+and documentation review; 5962 reports 61 ERT and identifies a final checkdoc
+confirmation as advisable. User-supplied flake outputs are historical
+verification evidence, not independently rerun checks.
 
 ## Interpretation
 

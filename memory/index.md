@@ -19,8 +19,8 @@ appropriate stage; do not pre-encode the lookup key speculatively.
 
 The final HTML participates in output planning, conflict checks, staging and
 promotion. At this point public index options include `:path`, `:title`,
-`:template`, `:bindings` and `:body`. Real publish-driver enablement and full
-release closure still need confirmation after this implementation review.
+`:template`, `:bindings` and `:body`. The public publish driver now enables index generation; an earlier
+unconditional not-implemented rejection was removed.
 
 ## Reasons and scope
 
@@ -44,6 +44,8 @@ rewriting or repair upstream fragment behavior in other pages.
 ## Historical verification
 
 The source reports 6/6 focused index ERT and 58/58 full ERT plus package-lint
-and flake checks after implementation. Explicit headline-ID ERT and actual
-publish promotion still receive later follow-through. This reconstruction
-has not rerun those checks.
+and flake checks after implementation. Later evidence adds explicit headline-ID ERT and a real publish run
+whose index output was promoted without diagnostics and whose successful
+staging was cleaned. The user reports parity with the prior site output.
+Final preflight/capability work reports 61 ERT. These are later historical
+results, not results rerun during reconstruction.
