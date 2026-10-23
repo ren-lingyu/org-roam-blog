@@ -5,14 +5,14 @@ promise or implementation priority: **current blocker**, **conditional
 blocker**, or **non-blocking candidate**. Rejected approaches belong in
 topic memory rather than becoming tasks automatically.
 
-## Initial implementation
+## Publication-core follow-through
 
-- Status: adopted; current blocker for a usable independent publisher.
-- Need: implement and verify selection/manifest, store output, aliases,
-  sitemap, explicit static publication and configuration/capability checks.
-- Source: original Codex architecture discussion through the design summary.
-- Completion condition: staged implementation and meaningful tests support
-  the agreed publication behavior; do not equate a scaffold with completion.
+- Status: implementation exists; inspect later evidence before calling the
+  complete release finished.
+- Level: conditional blocker for release readiness if metadata, export
+  isolation or representative real-site behavior remains unverified.
+- Next: settle database-backed publication time and localized customization;
+  perform meaningful regression checks rather than repair upstream links.
 
 ## Theindex
 

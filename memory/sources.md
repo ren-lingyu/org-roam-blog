@@ -7,11 +7,13 @@ The original Codex discussion is session
 Record numbers below are one-based JSONL record positions in that source.
 They locate evidence; they are not a replay log or checkpoint identifiers.
 
-Covered scope at this recovery point: extraction motivation and adopted publication architecture, before the implementation sequence.
+Covered scope at this recovery point: design through publication orchestration and ordinary relative-link regression coverage.
 
-Relevant evidence: records 9–471, especially the store/redirect decision
-around 244–343 and the consolidated architecture at 465. Early direct-path,
-registry and alias alternatives are proposals, not the adopted output model.
+Records 765–1780 cover incremental implementation, staging/promotion,
+static publication and link experiments. Recorded project history identifies
+the planning → generated content → aliases/sitemap → static → orchestration
+sequence. Records 1680–1732 distinguish upstream ID behavior from the package
+contract; failed experimental assertions were not adopted as package duties.
 
 ## Interpretation
 

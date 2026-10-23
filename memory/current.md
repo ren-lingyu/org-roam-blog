@@ -2,13 +2,13 @@
 
 ## Recovery point
 
-This is a retrospective reconstruction of the **architecture agreement** state, authored
+This is a retrospective reconstruction of the **publication-core implementation** state, authored
 at reconstruction time. It describes knowledge recoverable at this point,
 not a claim that later work had already happened.
 
-Objective: implement an independent publisher with database-selected content,
-canonical store output, optional public redirects and localized export
-configuration. The architecture is agreed; implementation is still ahead.
+The manifest, staged generated output, redirects, sitemap, static publication
+and orchestration exist. Preserve partial-failure diagnostics and native link
+semantics; theindex remains unimplemented.
 
 ## Reading order
 
@@ -19,6 +19,9 @@ evidence horizon and its limitations. Paths are formal-worktree-relative.
 
 ## Validation and next action
 
-Design evidence only at this point; no implementation-completion or test-pass claim.
+Historical implementation/test discussions support this state; no tests
+have been rerun during reconstruction. Do not infer an exact committed
+snapshot from the intervening dirty/staged implementation steps.
 
-Next: establish the package and implement the publication core incrementally.
+Next: finish metadata authority and scoped export customization, then assess
+real-site migration and the optional concept index.

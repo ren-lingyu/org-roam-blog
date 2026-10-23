@@ -40,6 +40,26 @@ management, Git/deployment, arbitrary export backends and automatic bundle
 attachment discovery are outside the first-release boundary. Referenced
 unselected files need not be published automatically.
 
-At this point this is an adopted design, not a completed implementation.
-Theindex is optional and its native `#+INDEX` integration remains to be
-settled. Export saved source files rather than unsaved visiting buffers.
+## Implemented publication core
+
+The public publish operation checks configuration/capabilities, constructs a
+database-selected manifest, enumerates explicit static inputs and builds the
+combined output plan before publication writes. Reject conflicting targets,
+unsafe paths and overlapping rule ownership rather than inventing precedence.
+Generate content, sitemap and redirects into a unique staging directory;
+only after successful generation copy static files directly to final targets
+and promote generated files individually. A late failure can leave partial
+output; report published targets and retain failed staging for diagnosis.
+Success cleans staging. This is not an atomic website replacement.
+
+`org-roam-blog-check` is a shape/root/capability check, not a full manifest
+or static-file preflight. Full output planning belongs to publish. No stale
+output deletion or durable publication cache is promised.
+
+Export saved files. Ordinary relative `file:` links benefit from the mirrored
+store. Experiments exposed upstream `id:`/fragment behavior; the package
+does not install a generalized rewrite/workaround for ordinary content links.
+Keep that distinct from the later concept-index integration problem.
+
+Theindex configuration exists but generation is not implemented at this
+point; enabling it fails before publication writes.
