@@ -2,13 +2,13 @@
 
 ## Recovery point
 
-This is a retrospective reconstruction of the **native theindex shadow-source experiment** state, authored
+This is a retrospective reconstruction of the **native theindex implementation review** state, authored
 at reconstruction time. It describes knowledge recoverable at this point,
 not a claim that later work had already happened.
 
-Native generation with a shadow Org symlink layout has experimental
-evidence and avoids reimplementing upstream indexing. It is provisional;
-filesystem dependencies and cleanup complexity are still under challenge.
+Native collector/generator plus the scoped HTML href mapper is adopted
+and implemented. Custom generation, shadow symlinks and advice are retired
+alternatives. The implementation commits were reviewed against explicit HEAD.
 
 ## Reading order
 
@@ -19,8 +19,9 @@ evidence horizon and its limitations. Paths are formal-worktree-relative.
 
 ## Validation and next action
 
-Probe successes are reported in the historical source. No package-wide
-shadow implementation or cross-platform validation is claimed.
+The historical source reports 6 focused and 58 full ERT after this
+implementation. The associated project snapshot grounds the implementation
+review; README was unstaged and is not part of that exact code-review state.
 
-Next: resolve the symlink-versus-in-process tradeoff before committing
-to package implementation. Preserve native fragment resolution.
+Next: add missing headline-ID coverage, exercise the real publication
+command, and finish release checks/documentation.

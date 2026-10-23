@@ -61,8 +61,8 @@ store. Experiments exposed upstream `id:`/fragment behavior; the package
 does not install a generalized rewrite/workaround for ordinary content links.
 Keep that distinct from the later concept-index integration problem.
 
-Theindex configuration exists but generation is not implemented at this
-point; enabling it fails before publication writes.
+Native theindex generation is implemented; see `memory/index.md`.
+Public-driver enablement and release closure are still pending at this point.
 
 ## Sitemap display and roots
 

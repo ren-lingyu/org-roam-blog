@@ -1,34 +1,49 @@
-# Concept-index work: native generator and shadow-source experiment
+# Native concept-index publication
 
-## Objective
+## Adopted pipeline
 
-Retain manifest-selected `#+INDEX` membership, native `!` hierarchy and
-file/headline destinations. Sitemap is a page listing; theindex is a concept
-index. DB node metadata and positional source export annotations have
-different authority boundaries; only selected files are parsed/exported.
+Use manifest-selected content rules with `:theindex t`. During ordinary
+content export native `org-publish-collect-index` fills one dynamically bound
+in-memory Publish cache containing real source paths. A private Publish
+project uses absolute manifest `:include` with `:exclude ".*"` and native
+`org-publish-index-generate-theindex`. Generated `theindex.org`, `.inc` and
+timestamp work live in private staging, not the source tree or public output.
 
-## Experimental result and provisional choice
+Let normal Org/ox-html inspect real sources and resolve file, ID, CUSTOM_ID
+and ordinary-headline destinations. A locally scoped
+`org-export-filter-link-functions` adapter then maps exact known source href
+bases to store href bases, preserving fragments and unrelated links. Its
+input is a transcoded HTML link string, not a raw URL or theindex.inc AST.
+Account for attribute escaping and encode the replacement store URL at the
+appropriate stage; do not pre-encode the lookup key speculatively.
 
-Reuse native `org-publish-collect-index`,
-`org-publish-index-generate-theindex` and ox-html rather than duplicate native
-sorting/grouping. Probes used absolute manifest `:include`, `:exclude ".*"`,
-dynamic in-memory Publish cache, temporary timestamp location and local ID
-locations. A store-shaped shadow `.org` symlink tree lets ox-html inspect
-actual source content while computing published-path-relative links.
+The final HTML participates in output planning, conflict checks, staging and
+promotion. At this point public index options include `:path`, `:title`,
+`:template`, `:bindings` and `:body`. Real publish-driver enablement and full
+release closure still need confirmation after this implementation review.
 
-The source reports successful file-level, CUSTOM_ID, ID and ordinary-headline
-resolution with this approach. At this recovery point shadow-source native
-generation is provisionally favored; this is a tested design, not completed
-package implementation. No advice is required by the shadow approach.
+## Reasons and scope
 
-## Open costs
+Native generation retains upstream sorting, grouping, `!` hierarchy and
+position-sensitive anchors. Rewriting .inc links to HTML before transcoding
+loses the Org source needed to resolve ordinary headlines. The local filter
+changes routing only after native semantics have been resolved.
 
-Separate private work (`theindex.org`, `.inc`, timestamp data and shadow
-sources) from promoted HTML. Mirror the configured index output directory
-inside the shadow layout, or relative links will be wrong. Symlink support,
-file handlers, filesystem/platform behavior and ownership-safe cleanup add
-independent constraints. The user questions whether this cost is justified.
+The custom generator was superseded because it duplicates upstream logic;
+shadow symlinks were superseded because of filesystem/platform and cleanup
+costs. Global/local advice and bypassing other users' advice were explored
+but not adopted. No shadow tree, global project registration, persistent
+Publish cache or schema extension is required by the adopted implementation.
 
-Custom fragment guessing already proved fragile because ox-html needs real
-Org targets. Local advice and removing other users' advice are alternatives
-under discussion, not an adopted package dependency.
+Selection/node publication metadata stay DB-backed. `#+INDEX` is a selected
+document's positional export annotation. This distinction does not allow
+scanning unselected content or installing a companion metadata database.
+The scoped index mapper does not promise generalized ordinary-content `id:`
+rewriting or repair upstream fragment behavior in other pages.
+
+## Historical verification
+
+The source reports 6/6 focused index ERT and 58/58 full ERT plus package-lint
+and flake checks after implementation. Explicit headline-ID ERT and actual
+publish promotion still receive later follow-through. This reconstruction
+has not rerun those checks.

@@ -7,12 +7,15 @@ The original Codex discussion is session
 Record numbers below are one-based JSONL record positions in that source.
 They locate evidence; they are not a replay log or checkpoint identifiers.
 
-Covered scope at this recovery point: theindex native-generator probes through the provisional shadow-source design and its open costs.
+Covered scope at this recovery point: native generator/filter decision, probes, implementation and exact implementation-commit review.
 
-Records 4988–5194 contain native-generator and shadow-source probes.
-The response at 5200 provisionally endorses shadow sources while correcting
-work/output layout; the user objection at 5206 raises platform and auditability
-concerns. Later resolution is intentionally excluded from this snapshot.
+Records 5213–5394 replace the shadow approach with native generation
+plus a scoped post-transcoding mapper and validate its boundaries. Records
+5404–5593 cover implementation and commit review; 5540 reports 6 focused
+and 58 full ERT. Tool output at 5585 explicitly identifies the reviewed HEAD
+as `afb87383fe95ef98dcd2d355a36d65965d8d5d93`, with README still unstaged.
+This supports the code implementation review context, not a claim that the
+unstaged documentation or every earlier experiment equals that commit.
 
 ## Interpretation
 
