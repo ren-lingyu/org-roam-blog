@@ -1,21 +1,26 @@
 # Backlog
 
-Blocking levels: current blocker, conditional blocker, non-blocking candidate.
-Completion is distinct from a promise to implement every discussed extension.
+Levels: current blocker, conditional blocker, non-blocking candidate.
+No known implementation blocker to the agreed v0.1.0 feature scope remains
+in the examined source. Historical validation limits remain in sources and
+topic memory; they are not invented implementation tasks.
 
-## Release verification follow-through
+## Optional next capabilities
 
-- Status: native index, headline-ID coverage and actual promotion completed
-  in historical evidence; final docs/preflight considered release-candidate ready.
-- Level: conditional blocker for publishing a release if final checkdoc or
-  other explicitly outstanding validation is still unconfirmed.
-- Source: original Codex records 5599–6040.
-- Next: distinguish release-candidate readiness from an actual release;
-  do not create tags or infer external publication from local tests.
+- Feed generation: discussed, not adopted; non-blocking candidate. Revisit
+  when local generation has a concrete benefit over the existing external
+  feed workflow and URL/metadata requirements are specified.
+- Incremental/per-file publication: discussed, not adopted; non-blocking
+  candidate. Revisit for measured full-build cost; cache invalidation and
+  auxiliary-page dependencies need an explicit design.
+- Publish-on-save/minor mode: deferred, not a release requirement;
+  non-blocking candidate. Revisit for a concrete opt-in automation need.
+- Stale-output diagnostics/cleanup: discussed, not implemented;
+  non-blocking candidate. Revisit when obsolete outputs cause a problem;
+  reporting and deletion are separate capabilities requiring ownership rules.
+- Automatic bundle attachments: outside initial scope; non-blocking
+  candidate only if explicitly reconsidered. Current explicit static rules
+  remain the alternative.
 
-## Deferred extensions
-
-- Feed, incremental/per-file publishing, save hooks, stale-output management
-  and attachment discovery remain non-blocking candidates.
-- Reconsider only for a concrete user need; lifecycle and deletion policy
-  must be defined before any new implementation.
+Source: original Codex first-release boundary and follow-through discussions.
+Do not turn these proposals into a promised next release.

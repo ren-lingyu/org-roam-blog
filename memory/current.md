@@ -2,14 +2,14 @@
 
 ## Recovery point
 
-This is a retrospective reconstruction of the **publication closure and release candidate** state, authored
+This is a retrospective reconstruction of the **generated-page API completion** state, authored
 at reconstruction time. It describes knowledge recoverable at this point,
 not a claim that later work had already happened.
 
-Theindex publication now completes through the actual driver. Headline
-ID coverage, final preflight/capability checks and workflow documentation
-have historical follow-through. This state is a release candidate, not proof
-of an external release.
+The public generated-document contract now uses optional Org-source
+preambles and a sitemap body renderer. Tests, schema checks, docstrings
+and README were aligned in the historical source; the local v0.1.0 tag
+identifies the final API snapshot.
 
 ## Reading order
 
@@ -20,9 +20,9 @@ evidence horizon and its limitations. Paths are formal-worktree-relative.
 
 ## Validation and next action
 
-Historical records report successful real publication, user-observed
-parity and 61 ERT/full flake checks. The source recommends a final checkdoc
-confirmation; reconstruction does not manufacture that missing result.
+Preserve historical real-publish/ERT evidence without treating it as a
+fresh run on the tagged tree. External release/deployment is not inferred
+from the tag or release-candidate discussions alone.
 
-Next: confirm remaining release validation as needed and migrate the
-site configuration. Generated-document customization is still being refined.
+Next: use the final schema when migrating configuration; choose later
+work from actual user needs rather than draft TODO lists.

@@ -72,3 +72,10 @@ directory scan. Source, publication and explicitly configured temporary roots
 must already exist as real non-symlink directories; do not silently create
 the publication root. Internal generated store subdirectories may be created.
 The store default is now `_store`, avoiding the implication of raw Org output.
+
+## Versioned interface
+
+The final generated-page interface uses Org-source `:preamble` and sitemap
+`:renderer`, as described in `memory/export.md`. The local `v0.1.0` tag
+resolves to the generated-index preamble commit. This identifies the tagged
+source API; it alone does not prove an external release page or deployment.

@@ -18,8 +18,9 @@ Account for attribute escaping and encode the replacement store URL at the
 appropriate stage; do not pre-encode the lookup key speculatively.
 
 The final HTML participates in output planning, conflict checks, staging and
-promotion. At this point public index options include `:path`, `:title`,
-`:template`, `:bindings` and `:body`. The public publish driver now enables index generation; an earlier
+promotion. Public index options include `:path`, optional Org-source `:preamble`,
+`:template`, `:bindings` and `:body`. Put `#+TITLE` in `:preamble` when wanted;
+the dedicated `:title` field has been removed. The public publish driver now enables index generation; an earlier
 unconditional not-implemented rejection was removed.
 
 ## Reasons and scope

@@ -7,14 +7,14 @@ The original Codex discussion is session
 Record numbers below are one-based JSONL record positions in that source.
 They locate evidence; they are not a replay log or checkpoint identifiers.
 
-Covered scope at this recovery point: headline-ID regression, actual theindex publication and v0.1.0 candidate preflight/documentation.
+Covered scope at this recovery point: generated-page preamble/renderer API, migration and final accompanying documentation review.
 
-Records 5599–5766 add ID coverage, exercise actual publication and
-remove the driver blocker. At 5799 the user reports output parity with the
-prior personal configuration. Records 5811–6040 finish preflight, capability
-and documentation review; 5962 reports 61 ERT and identifies a final checkdoc
-confirmation as advisable. User-supplied flake outputs are historical
-verification evidence, not independently rerun checks.
+Records 6057–6253 exercise migration and motivate Org-source preambles.
+Records 6285–6509 retire dedicated titles and narrow the generator to a
+renderer; 6553–6645 discuss real configuration testing and prepared ordering.
+Records 6710–6821 finish documentation/docstring alignment and staged review.
+The local tagged source provides an independent API lookup, not exact
+provenance for each dirty-tree migration test.
 
 ## Interpretation
 

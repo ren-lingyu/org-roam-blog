@@ -32,10 +32,19 @@ and restore dynamic state after export.
 
 `:visible-tags` is a strict display whitelist: absent/nil/empty means display
 no tags. Projection affects neither selected pages nor content-rule matching.
-The custom `:generator` receives one context with prepared `:entries` and
-`:config`, and returns complete sitemap Org source. Entries are already
-selected, sorted and projected. At this point `:title` and `:generator` are
-the public names; do not substitute a later renderer/preamble contract.
+The custom `:renderer` receives one context with prepared `:entries` and
+`:config`, returning an Org source fragment. Entries are already selected,
+sorted and projected. `:preamble` supplies static source before that fragment,
+including optional `#+TITLE`, abstract or metadata. A renderer may return
+supporting Org keywords such as `#+HTML_HEAD_EXTRA` together with its body.
+Prefer returning such source rather than mutating export variables.
+
+The same optional Org-source `:preamble` precedes the native index include.
+Sitemap and theindex no longer have dedicated `:title`; sitemap `:generator`
+was renamed/narrowed to `:renderer`. This public interface change requires
+configuration migration, not aliases that silently preserve draft schemas.
+Renderer and export share the object's scoped bindings. The renderer
+consumes already sorted entries; personal renderers need not sort again.
 
 The package supplies publication context and lifecycle, not a site theme.
 Keep status markup, CSS, navigation, license and tag-filter UI in user config.
