@@ -2,13 +2,13 @@
 
 ## Recovery point
 
-This is a retrospective reconstruction of the **initial theindex implementation plan** state, authored
+This is a retrospective reconstruction of the **native theindex shadow-source experiment** state, authored
 at reconstruction time. It describes knowledge recoverable at this point,
 not a claim that later work had already happened.
 
-Representative publishing migration has been exercised in the discussion.
-Theindex is now an adopted release objective. A collector plus custom
-generator is the current plan, with native anchor fidelity unresolved.
+Native generation with a shadow Org symlink layout has experimental
+evidence and avoids reimplementing upstream indexing. It is provisional;
+filesystem dependencies and cleanup complexity are still under challenge.
 
 ## Reading order
 
@@ -19,8 +19,8 @@ evidence horizon and its limitations. Paths are formal-worktree-relative.
 
 ## Validation and next action
 
-Historical reports include 54/54 ERT for prerequisites. Collector probes
-and migration observations are historical evidence, not tests rerun here.
+Probe successes are reported in the historical source. No package-wide
+shadow implementation or cross-platform validation is claimed.
 
-Next: compare native generator behavior and test source/anchor mapping
-before implementing a replacement term organizer.
+Next: resolve the symlink-versus-in-process tradeoff before committing
+to package implementation. Preserve native fragment resolution.

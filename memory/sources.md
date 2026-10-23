@@ -7,13 +7,12 @@ The original Codex discussion is session
 Record numbers below are one-based JSONL record positions in that source.
 They locate evidence; they are not a replay log or checkpoint identifiers.
 
-Covered scope at this recovery point: framework readiness, representative migration and initial theindex collector/custom-generator plan.
+Covered scope at this recovery point: theindex native-generator probes through the provisional shadow-source design and its open costs.
 
-The migration/root/tag-display discussion occupies records 4352–4677.
-Records 4701–4988 cover collector probes, conditional prerequisites and the
-custom-generator proposal. At 4893 the source reports 54/54 ERT and states
-that native generation is not yet planned; anchor mapping remains open.
-The subsequent change of plan must not be back-projected into this state.
+Records 4988–5194 contain native-generator and shadow-source probes.
+The response at 5200 provisionally endorses shadow sources while correcting
+work/output layout; the user objection at 5206 raises platform and auditability
+concerns. Later resolution is intentionally excluded from this snapshot.
 
 ## Interpretation
 

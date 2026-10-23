@@ -1,26 +1,34 @@
-# Concept-index work: collector and custom generator plan
+# Concept-index work: native generator and shadow-source experiment
 
-## Objective and authority boundary
+## Objective
 
-Theindex is a concept/location index, distinct from the sitemap's published
-page list. The user now wants it in v0.1.0. Preserve native `#+INDEX` terms,
-`!` hierarchy and file/headline locations rather than replace it with titles.
-The manifest's `:theindex t` rules alone determine participating sources.
+Retain manifest-selected `#+INDEX` membership, native `!` hierarchy and
+file/headline destinations. Sitemap is a page listing; theindex is a concept
+index. DB node metadata and positional source export annotations have
+different authority boundaries; only selected files are parsed/exported.
 
-## Current plan
+## Experimental result and provisional choice
 
-During ordinary selected-content export, attach native
-`org-publish-collect-index` to a dynamically bound in-memory
-`org-publish-cache`. A custom generator would consume `(TERM FILE PARENT)`
-records, organize terms and map source files to canonical store HTML. Its
-Org output would use normal export customization and staging/promotion.
-Avoid source-side generated files and persistent timestamp/cache artifacts.
+Reuse native `org-publish-collect-index`,
+`org-publish-index-generate-theindex` and ox-html rather than duplicate native
+sorting/grouping. Probes used absolute manifest `:include`, `:exclude ".*"`,
+dynamic in-memory Publish cache, temporary timestamp location and local ID
+locations. A store-shaped shadow `.org` symlink tree lets ox-html inspect
+actual source content while computing published-path-relative links.
 
-This plan intentionally avoids native `org-publish-index-generate-theindex`
-at this point. It is not the implemented generator. ID/CUSTOM_ID and ordinary
-headline targets still require validation: changing an Org source target to
-HTML too early may lose the information ox-html needs to resolve fragments.
+The source reports successful file-level, CUSTOM_ID, ID and ordinary-headline
+resolution with this approach. At this recovery point shadow-source native
+generation is provisionally favored; this is a tested design, not completed
+package implementation. No advice is required by the shadow approach.
 
-DB selection remains authoritative. `#+INDEX` is document-internal positional
-export information, unlike node-level publication metadata. Collecting it
-while exporting already selected sources does not authorize broader scans.
+## Open costs
+
+Separate private work (`theindex.org`, `.inc`, timestamp data and shadow
+sources) from promoted HTML. Mirror the configured index output directory
+inside the shadow layout, or relative links will be wrong. Symlink support,
+file handlers, filesystem/platform behavior and ownership-safe cleanup add
+independent constraints. The user questions whether this cost is justified.
+
+Custom fragment guessing already proved fragile because ox-html needs real
+Org targets. Local advice and removing other users' advice are alternatives
+under discussion, not an adopted package dependency.
