@@ -79,3 +79,18 @@ The final generated-page interface uses Org-source `:preamble` and sitemap
 `:renderer`, as described in `memory/export.md`. The local `v0.1.0` tag
 resolves to the generated-index preamble commit. This identifies the tagged
 source API; it alone does not prove an external release page or deployment.
+
+## Site URL and multiple targets
+
+`org-roam-blog-site-url` is validated as an optional HTTP(S) public root
+with a trailing slash and possible deployment subpath. Its private URL
+helper has no production callers in the examined implementation; content,
+sitemap and redirects use relative links. Configuration currently does not
+change published output. It is a reserved interface, not implemented feed
+or canonical-site metadata generation.
+
+Multiple domains serving the same output are a hosting concern. Independent
+sites can be built by locally binding the publication root, URL and relevant
+configuration for separate calls. No multi-site registry/API is implemented
+or approved. Such a registry would model publication targets, not content
+classification; see backlog for its conditional significance.

@@ -2,14 +2,13 @@
 
 ## Recovery point
 
-This is a retrospective reconstruction of the **generated-page API completion** state, authored
+This is a retrospective reconstruction of the **site-url and multiple-target clarification** state, authored
 at reconstruction time. It describes knowledge recoverable at this point,
 not a claim that later work had already happened.
 
-The public generated-document contract now uses optional Org-source
-preambles and a sitemap body renderer. Tests, schema checks, docstrings
-and README were aligned in the historical source; the local v0.1.0 tag
-identifies the final API snapshot.
+The release API remains single-target per publish call. The site-url
+setting is validated but unused by production output. Unified multi-site
+configuration is a conditional future need, not unfinished v0.1.0 work.
 
 ## Reading order
 
@@ -20,9 +19,8 @@ evidence horizon and its limitations. Paths are formal-worktree-relative.
 
 ## Validation and next action
 
-Preserve historical real-publish/ERT evidence without treating it as a
-fresh run on the tagged tree. External release/deployment is not inferred
-from the tag or release-candidate discussions alone.
+The fork adds source-reading analysis and proposals, not implementation
+or fresh test results. Its inherited conversation has been deduplicated.
 
-Next: use the final schema when migrating configuration; choose later
-work from actual user needs rather than draft TODO lists.
+Next: retain sequential local-binding publication as the current option;
+reopen target registry design only for an explicit multiple-site requirement.

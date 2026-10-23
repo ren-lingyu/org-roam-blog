@@ -24,3 +24,28 @@ topic memory; they are not invented implementation tasks.
 
 Source: original Codex first-release boundary and follow-through discussions.
 Do not turn these proposals into a promised next release.
+
+## Unified multi-site configuration
+
+- Status: discussed proposal, not adopted or implemented.
+- Level: conditional blocker only if a new objective requires unified
+  management of multiple independent publication targets. It does not block
+  current single-site publishing or sequential dynamically bound calls.
+- Motivation: avoid scattered per-site root/URL and export configuration
+  when genuinely managing separate sites, rather than domains sharing output.
+- Existing alternative: bind the relevant site variables around separate
+  publish invocations; hosting handles aliases for the same output.
+- Proposed direction: a site/target-level registry, not a URL per content
+  rule. Suggested names such as `org-roam-blog-sites` are not public APIs.
+- Reconsider when an explicit multiple-target use case establishes needed
+  configuration, invocation and inheritance behavior. Do not predesign it
+  merely because `site-url` exists.
+- Source: the second Codex session's new site-url/multiple-domain discussion.
+
+## Consuming the reserved site URL
+
+- Status: no production caller; no implementation commitment.
+- Level: conditional blocker for a future feature requiring absolute site
+  URLs, such as canonical metadata or a locally generated feed.
+- Next: define the consumer's requirements before expanding URL scope or
+  claiming that the current variable affects publishing output.

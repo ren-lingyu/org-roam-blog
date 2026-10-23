@@ -7,14 +7,14 @@ The original Codex discussion is session
 Record numbers below are one-based JSONL record positions in that source.
 They locate evidence; they are not a replay log or checkpoint identifiers.
 
-Covered scope at this recovery point: generated-page preamble/renderer API, migration and final accompanying documentation review.
+Covered scope at this recovery point: original development plus the fork-only site-url and multiple-domain clarification.
 
-Records 6057–6253 exercise migration and motivate Org-source preambles.
-Records 6285–6509 retire dedicated titles and narrow the generator to a
-renderer; 6553–6645 discuss real configuration testing and prepared ordering.
-Records 6710–6821 finish documentation/docstring alignment and staged review.
-The local tagged source provides an independent API lookup, not exact
-provenance for each dirty-tree migration test.
+The second session, `019fd0d1-0aba-7722-9f3b-535e0a12caa0`, declares
+the first session as its fork source. Its first 330 user messages match the
+original sequence; inherited discussion is integrated once. Its new material
+is at records 6831–6864: unused production site-url helper, site-level scope
+and hypothetical multiple-target configuration. Assistant design suggestions
+are proposals, not user adoption or implementation.
 
 ## Interpretation
 
