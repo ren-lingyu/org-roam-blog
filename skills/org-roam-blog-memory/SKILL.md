@@ -15,7 +15,7 @@ recovery point; source coverage and limits are in `memory/sources.md`.
 
 - `memory/current.md`: begin here for the objective, supported state and next action.
 - `memory/publishing.md`: publication model, safety and package boundaries.
-
+- `memory/export.md`: export customization and metadata.
 - `memory/backlog.md`: unimplemented proposals, adoption and blocking conditions.
 - `memory/sources.md`: source distinctions, coverage and validation limits.
 

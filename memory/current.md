@@ -2,13 +2,13 @@
 
 ## Recovery point
 
-This is a retrospective reconstruction of the **publication-core implementation** state, authored
+This is a retrospective reconstruction of the **metadata and scoped-export readiness** state, authored
 at reconstruction time. It describes knowledge recoverable at this point,
 not a claim that later work had already happened.
 
-The manifest, staged generated output, redirects, sitemap, static publication
-and orchestration exist. Preserve partial-failure diagnostics and native link
-semantics; theindex remains unimplemented.
+The core framework now supplies DB publication metadata, a strict sitemap
+tag-display whitelist and local template/bindings/body customization. It can
+replace the previous publishing lifecycle except theindex and deferred features.
 
 ## Reading order
 
@@ -19,9 +19,9 @@ evidence horizon and its limitations. Paths are formal-worktree-relative.
 
 ## Validation and next action
 
-Historical implementation/test discussions support this state; no tests
-have been rerun during reconstruction. Do not infer an exact committed
-snapshot from the intervening dirty/staged implementation steps.
+The source reports 50 ERT and full flake checks after export integration.
+Root checks and later real-site adjustments have their own evidence; this
+reconstruction has executed none of those tests.
 
-Next: finish metadata authority and scoped export customization, then assess
-real-site migration and the optional concept index.
+Next: validate representative migration and investigate native concept-index
+collection without compromising DB selection or normal Org export semantics.

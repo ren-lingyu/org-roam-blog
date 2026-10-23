@@ -5,14 +5,13 @@ promise or implementation priority: **current blocker**, **conditional
 blocker**, or **non-blocking candidate**. Rejected approaches belong in
 topic memory rather than becoming tasks automatically.
 
-## Publication-core follow-through
+## Representative migration validation
 
-- Status: implementation exists; inspect later evidence before calling the
-  complete release finished.
-- Level: conditional blocker for release readiness if metadata, export
-  isolation or representative real-site behavior remains unverified.
-- Next: settle database-backed publication time and localized customization;
-  perform meaningful regression checks rather than repair upstream links.
+- Status: core metadata and scoped export architecture implemented.
+- Level: conditional blocker for confidence in replacing the previous site
+  configuration; architecture alone is not a real-site publication result.
+- Next: migrate a representative configuration and inspect staging, public
+  targets and presentation without moving theme policy into the package.
 
 ## Theindex
 

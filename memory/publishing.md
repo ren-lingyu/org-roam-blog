@@ -63,3 +63,12 @@ Keep that distinct from the later concept-index integration problem.
 
 Theindex configuration exists but generation is not implemented at this
 point; enabling it fails before publication writes.
+
+## Sitemap display and roots
+
+Sitemap uses the explicit tag-display whitelist described in
+`memory/export.md`. Its metadata comes from the manifest, not a second
+directory scan. Source, publication and explicitly configured temporary roots
+must already exist as real non-symlink directories; do not silently create
+the publication root. Internal generated store subdirectories may be created.
+The store default is now `_store`, avoiding the implication of raw Org output.
