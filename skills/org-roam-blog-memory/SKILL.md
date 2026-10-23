@@ -10,13 +10,11 @@ description: Recover and navigate Org-roam Blog's formal GAW memory when resumin
 Locate the formal worktree with `git gaw status`. All paths below are
 relative to that worktree root, not this skill's installation directory.
 
-Reconstruction is in progress. `memory/current.md` names this snapshot's
-recovery point; source coverage and limits are in `memory/sources.md`.
-
 - `memory/current.md`: begin here for the objective, supported state and next action.
 - `memory/publishing.md`: publication model, safety and package boundaries.
 - `memory/export.md`: export customization and metadata.
 - `memory/index.md`: concept-index decisions and link semantics.
+- `memory/testing.md`: test runners and historical validation.
 - `memory/backlog.md`: unimplemented proposals, adoption and blocking conditions.
 - `memory/sources.md`: source distinctions, coverage and validation limits.
 

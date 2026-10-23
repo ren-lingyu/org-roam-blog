@@ -50,3 +50,13 @@ whose index output was promoted without diagnostics and whose successful
 staging was cleaned. The user reports parity with the prior site output.
 Final preflight/capability work reports 61 ERT. These are later historical
 results, not results rerun during reconstruction.
+
+## Supplementary design explanation
+
+The separate web-discussion summary explains why a companion SQLite cache
+or custom Org-roam schema was not adopted: it adds synchronization, deletion,
+rename and migration responsibilities without improving a value immediately
+collected and consumed during export. Use the selected source parse tree for
+positional annotations while keeping DB authority over publication nodes.
+This supports the final architecture; its timing within the Codex work is not
+established and is not assigned to an earlier checkpoint.
