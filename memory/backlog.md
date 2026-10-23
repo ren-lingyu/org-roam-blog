@@ -1,30 +1,19 @@
 # Backlog
 
-Levels describe impact on the recovery point's adopted objective, not a
-promise or implementation priority: **current blocker**, **conditional
-blocker**, or **non-blocking candidate**. Rejected approaches belong in
-topic memory rather than becoming tasks automatically.
+Blocking levels apply to adopted objectives; candidates are not commitments.
 
-## Representative migration validation
+## Native concept-index fidelity
 
-- Status: core metadata and scoped export architecture implemented.
-- Level: conditional blocker for confidence in replacing the previous site
-  configuration; architecture alone is not a real-site publication result.
-- Next: migrate a representative configuration and inspect staging, public
-  targets and presentation without moving theme policy into the package.
+- Status: adopted for v0.1.0; collector/custom-generator plan under evaluation.
+- Level: current blocker for the agreed concept-index milestone.
+- Need: preserve hierarchy, membership and file/headline destinations,
+  especially ID, CUSTOM_ID and generated ordinary-headline anchors.
+- Source: original Codex records 4701–4988.
+- Next: test the planned mapping against native generator/export behavior;
+  do not guess fragments or extend ordinary content-link rewriting.
 
-## Theindex
+## Deferred extensions
 
-- Status: discussed, optional for the initial release at this point.
-- Level: non-blocking candidate; revisit when concept-index compatibility
-  becomes an explicit release requirement.
-- Need: reuse author-supplied `#+INDEX` semantics, including positional
-  entries where feasible; do not silently substitute a title-only sitemap.
-
-## Deferred product extensions
-
-- Feed generation, incremental publishing, publish-on-save and stale-output
-  management are non-blocking candidates, not accepted milestones.
-- Reconsider each only for a concrete user need and an explicit output,
-  cache, attachment or deletion policy. Existing external feed generation
-  is a possible alternative; no deployment integration is assumed.
+- Feed, incremental publishing, save hooks, automatic attachments and stale
+  output cleanup remain non-blocking candidates, not release requirements.
+- Reopen only for a concrete use case and an explicit lifecycle/policy.

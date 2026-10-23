@@ -7,14 +7,13 @@ The original Codex discussion is session
 Record numbers below are one-based JSONL record positions in that source.
 They locate evidence; they are not a replay log or checkpoint identifiers.
 
-Covered scope at this recovery point: publication core, sitemap whitelist, DB metadata, scoped export/body pipeline and root validation.
+Covered scope at this recovery point: framework readiness, representative migration and initial theindex collector/custom-generator plan.
 
-Records 1791–1870 settle strict tag display; 2978–3365 settle DB-backed
-PUBLISHED and its read-only boundary; 3449–4346 establish local bindings,
-the final export-default naming and additive body pipeline. The later root
-validation/store-default discussion is around 4392–4701. Reported checks
-include 39 ERT at the metadata stage and 50 after export integration; these
-are distinct historical states, not one exact-snapshot validation claim.
+The migration/root/tag-display discussion occupies records 4352–4677.
+Records 4701–4988 cover collector probes, conditional prerequisites and the
+custom-generator proposal. At 4893 the source reports 54/54 ERT and states
+that native generation is not yet planned; anchor mapping remains open.
+The subsequent change of plan must not be back-projected into this state.
 
 ## Interpretation
 
