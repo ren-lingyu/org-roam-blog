@@ -31,7 +31,8 @@ attributes, `lpkgs` imports the `pkgs/` overlays, and `specialArgs.src` is the
 and the `emacs` wrapper, both built against the default Emacs package set
 rather than an explicitly pinned Emacs version. The `emacsPackages` overlay is
 exported. Checks use `tests.mkChecks` with `test-overlay.nix` leaves for ERT
-and package-lint. Read `memory/testing.md` for the check structure.
+and package-lint. Treefmt formatting is part of flake checks through
+`treefmt.flakeCheck`. Read `memory/testing.md` for the check structure.
 
 ## Reading order and next action
 
@@ -40,10 +41,11 @@ for metadata and extension contracts, and `memory/index.md` for index design
 reasons and scope. Consult `memory/backlog.md` for unimplemented work and
 blocking conditions; `memory/sources.md` states coverage and source limits.
 
-The framework packaging migration is committed through the `pkgs/` and
-`tests/` overlay change. Remaining planned alignment steps are repository
-formatting, the treefmt check gate, README alignment, and narrowing `llib`.
-Resume by confirming the next step and current source state.
+The framework alignment is complete: package/check overlay migration,
+repository formatting, the treefmt check gate, and README alignment are all
+committed. `llib` was already narrowed to `tests` and `packages` during the
+migration. No further alignment step remains. Resume by confirming the next
+task and current source state.
 
 ## Validation limits
 
@@ -54,8 +56,10 @@ flake, the user ran `nix flake check`; it evaluated the package, wrapper,
 overlay, ERT and package-lint check derivations, devShells and the treefmt
 formatter, and exited successfully with zero failures on x86_64-linux. The
 run reported zero executed flake checks, so no check derivation was actually
-built in that invocation; only evaluation was verified. Other systems were
-omitted. Reconstruction performed source/DAG and GAW snapshot validation
-only, with no new project build, test, deployment or release verification
-beyond that user check. Missing original web chronology and cross-session
-predecessor context are bounded in `memory/sources.md`.
+built in that invocation; only evaluation was verified. That run predates the
+treefmt check gate, which is now enabled but has not been freshly re-validated
+by a reported `nix flake check`. Other systems were omitted. Reconstruction
+performed source/DAG and GAW snapshot validation only, with no new project
+build, test, deployment or release verification beyond the user check.
+Missing original web chronology and cross-session predecessor context are
+bounded in `memory/sources.md`.
