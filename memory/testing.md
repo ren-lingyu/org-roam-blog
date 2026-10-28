@@ -1,14 +1,23 @@
 # Test infrastructure and validation boundaries
 
+## Current check structure
+
+`tests/default.nix` calls `llib.tests.mkChecks` to discover sibling
+`test-overlay.nix` leaves. The ERT and package-lint groups each provide a
+`test.nix` derivation plus a `test-overlay.nix` wrapper. The package-lint
+overlay supplies an Emacs with `org-roam-blog` and `package-lint`; the ERT
+overlay reuses the flake `emacs` wrapper.
+
 ## Current runners
 
-ERT and package-lint Nix derivations generate executable Guile runners with
-`pkgs.replaceVarsWith`. The ERT runner invokes batch Emacs with the selected
-test file. The lint runner recursively collects `.el` files, fails for an
-empty set and passes arguments with `system*`, replacing shell/find/mapfile
-assembly. Both establish a temporary HOME, propagate failure and create the
-derivation output only after success. Scheme runner files are tracked via
-the repository's test-file ignore exceptions.
+The Guile runner mechanism is unchanged. ERT and package-lint derivations
+generate executable Guile runners with `pkgs.replaceVarsWith`. The ERT runner
+invokes batch Emacs with the selected test file. The lint runner recursively
+collects `.el` files, fails for an empty set and passes arguments with
+`system*`, replacing shell/find/mapfile assembly. Both establish a temporary
+HOME, propagate failure and create the derivation output only after success.
+Scheme runner files are tracked via the repository's test-file ignore
+exceptions.
 
 ## Historical evidence
 
