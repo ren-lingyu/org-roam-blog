@@ -1,5 +1,4 @@
 {
-
   description = "Emacs package: org-roam-blog";
 
   inputs = {
@@ -12,73 +11,74 @@
     };
   };
 
-  outputs = { self, ... }@inputs : inputs.personal-nixpkgs.lib.mkFlake
-    inputs.nixpkgs
-    ({ lib }: {
-      inherit inputs;
-      moduleLocation = __curPos.file;
-    })
-    {
-
-      systems = inputs.nixpkgs.lib.systems.flakeExposed;
-
-      perSystem = { config, pkgs, ... } : let
-
-        source = pkgs.lib.fileset.toSource {
-          root = ./lisp;
-          fileset = pkgs.lib.fileset.unions [
-            ./lisp
-          ];
+  outputs =
+    { self, ... }@inputs:
+    inputs.personal-nixpkgs.lib.mkFlake inputs.nixpkgs
+      ({ lib }: rec {
+        inherit inputs;
+        moduleLocation = __curPos.file;
+        llib = { inherit (inputs.personal-nixpkgs.lib) tests packages; };
+        lpkgs = import ./pkgs {
+          inherit llib;
+          inherit (specialArgs) src;
         };
-
-        emacsPackages = pkgs.emacsPackagesFor pkgs.emacs31;
-
-        emacs = emacsPackages.emacsWithPackages (ps_ : (builtins.concatLists [
-          (with ps_; [
-            package-lint
-          ])
-          [ config.packages.default ]
-        ]));
-
-      in {
-
-        packages = {
-          default = emacsPackages.trivialBuild {
-            pname = "org-roam-blog";
-            version = "0.1.0";
-            src = source;
-            packageRequires = [
-              emacsPackages.org
-              emacsPackages.org-roam
-            ];
-            turnCompilationWarningToError = true;
+        specialArgs = {
+          src = lib.fileset.toSource {
+            root = ./lisp;
+            fileset = ./lisp;
           };
         };
+      })
+      (
+        {
+          src,
+          llib,
+          lpkgs,
+          ...
+        }:
+        {
+          systems = inputs.nixpkgs.lib.systems.flakeExposed;
 
-        checks = import ./tests {
-          inherit pkgs source emacs;
-        };
-
-        devShells = {
-          default = pkgs.mkShell {
-            packages = [
-              emacs
-            ];
+          flake = {
+            overlays = { inherit (lpkgs.overlays) emacsPackages; };
           };
-        };
 
-        treefmt = {
-          flakeCheck = false;
-          settings.excludes = [
-            ".gitignore"
-            "LICENSE"
-            "README.org"
-            "flake.lock"
-          ];
-        };
+          perSystem = { pkgs, ... }: {
+            nixpkgs.overlays = [ lpkgs.overlays.legacy ];
 
-      };
+            legacyPackages = pkgs.legacyPackages;
 
-    };
+            packages = {
+              org-roam-blog = pkgs.emacsPackages.org-roam-blog;
+              emacs = pkgs.emacs-with-org-roam-blog;
+            };
 
+            checks = import ./tests {
+              inherit src pkgs llib;
+              emacs = pkgs.emacs-with-org-roam-blog;
+            };
+
+            devShells = {
+              default = pkgs.mkShell {
+                packages = [
+                  (pkgs.emacsPackages.emacsWithPackages (ps: [
+                    ps.org-roam-blog
+                    ps.package-lint
+                  ]))
+                ];
+              };
+            };
+
+            treefmt = {
+              flakeCheck = false;
+              settings.excludes = [
+                ".gitignore"
+                "LICENSE"
+                "README.org"
+                "flake.lock"
+              ];
+            };
+          };
+        }
+      );
 }

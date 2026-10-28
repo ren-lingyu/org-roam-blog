@@ -18,6 +18,10 @@
 !/lisp/
 !/lisp/*.el
 
+!/pkgs/
+!/pkgs/**/
+!/pkgs/**/*.nix
+
 !/tests/
 !/tests/**/
 !/tests/**/*.el
