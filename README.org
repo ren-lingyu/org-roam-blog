@@ -9,26 +9,42 @@ The package treats the synchronized Org-roam database and saved files on disk as
 * Repository Structure
 #+BEGIN_SRC text
   .
-  ├── org-roam-blog.el
-  ├── README.org
-  ├── LICENSE
   ├── flake.nix
   ├── flake.lock
+  ├── lisp/
+  │   └── org-roam-blog.el
+  ├── pkgs/
+  │   ├── default.nix
+  │   ├── emacsPackages/org-roam-blog/
+  │   │   ├── overlay.nix
+  │   │   └── package.nix
+  │   └── emacs-with-org-roam-blog/
+  │       ├── overlay.nix
+  │       └── package.nix
+  ├── README.org
+  ├── LICENSE
+  ├── .gitignore
   └── tests/
       ├── default.nix
       ├── ert/
-      │   ├── default.nix
+      │   ├── test.nix
+      │   ├── test-overlay.nix
+      │   ├── run.scm
       │   └── ert.el
       └── package-lint/
-          └── default.nix
+          ├── test.nix
+          ├── test-overlay.nix
+          └── run.scm
 #+END_SRC
 
 Key conventions:
 
-- =org-roam-blog.el= is the package implementation and public entry point.
-- =flake.nix= defines the package build, development shell, ERT check, and package-lint check.
+- =lisp/org-roam-blog.el= is the package implementation and public entry point.
+- =pkgs/= defines the MELPA package and an Emacs wrapper through =package.nix= and =overlay.nix= pairs.
+- =flake.nix= wires package overlays, development shells, checks, and formatting through the personal-nixpkgs framework. It exposes the named =org-roam-blog= package and the =emacs= wrapper, without a default package. Use =nix build .#org-roam-blog= or =nix build .#emacs= to select one explicitly.
+- Each check suite uses =test.nix= and =test-overlay.nix=, discovered through =tests/default.nix=.
 - =tests/ert/ert.el= contains the ERT test suite.
-- =tests/package-lint/default.nix= runs package-lint against the packaged Elisp source.
+- =tests/package-lint/test.nix= runs package-lint against the packaged Elisp source.
 
 * Features
 The package includes the following main features:
