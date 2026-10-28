@@ -1,8 +1,6 @@
 *
 */
 
-!/*.el
-
 !/.github/
 !/.github/**/
 !/.github/**/*.yaml
@@ -16,6 +14,9 @@
 
 !/flake.lock
 !/flake.nix
+
+!/lisp/
+!/lisp/*.el
 
 !/tests/
 !/tests/**/

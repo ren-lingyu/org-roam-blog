@@ -25,11 +25,9 @@
       perSystem = { config, pkgs, ... } : let
 
         source = pkgs.lib.fileset.toSource {
-          root = ./.;
+          root = ./lisp;
           fileset = pkgs.lib.fileset.unions [
-            ./org-roam-blog.el
-            ./README.org
-            ./LICENSE
+            ./lisp
           ];
         };
 
