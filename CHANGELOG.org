@@ -1,0 +1,50 @@
+#+title: Org-roam Blog Changelog
+#+todo: TODO NEXT WAIT | DONE CANCELED
+#+startup: logdone
+#+property: TIMEZONE UTC
+
+Notable user-visible changes, newest first. Version links lead to the complete
+release notes. Entries follow Keep a Changelog categories in Org format.
+
+* DONE v0.1.0
+CLOSED: [2026-07-31 Fri 09:11]
+:PROPERTIES:
+:CUSTOM_ID: v0.1.0
+:END:
+[[file:CHANGELOGS/v0.1.0.org][Detailed release notes]]
+
+Initial release. Requires Emacs 30.1 or later, Org 9.5 or later, Org-roam 2.3.1
+or later, and a user-synchronized Org-roam database.
+
+** Added
+- Select file-level Org-roam nodes matching every tag in a content rule,
+  restricting eligible files to the configured source root. Read titles, tags
+  and publication metadata from the synchronized database and export saved
+  files without modifying their source.
+- Publish HTML into a canonical =_store= directory that preserves
+  source-relative paths, with optional public alias pages redirecting through
+  relative URLs.
+- Generate a sitemap from selected content, with optional publication-time
+  sorting, an explicit visible-tag whitelist and a custom Org-source
+  =:renderer=.
+- Generate a native Org concept index from selected files' =#+INDEX= entries,
+  preserving native file, headline, =CUSTOM_ID=, =ID=, hierarchy and grouping
+  semantics. Map index source links to store URLs while leaving fragments and
+  ordinary content links under Org's control.
+- Customize generated documents with default and per-object export
+  =:template= options, scoped dynamic =:bindings= and context-aware =:body=
+  functions. Preserve standard Org hooks, filters and file-local settings;
+  sitemap and index pages also accept Org-source =:preamble= content.
+- Recursively publish explicitly configured static resources through native
+  Org attachment publishing, preserving paths relative to each static source.
+- Provide =org-roam-blog-check= for configuration, root-directory and runtime
+  capability checks, and =org-roam-blog-publish= for complete publication.
+  Publication builds the content and static output plan and rejects unsafe
+  targets, rule overlap and output conflicts before writing.
+- Stage generated content, sitemap, index and redirects before copying static
+  files directly to their destinations and promoting generated files
+  individually. Failures retain staging and report any already published
+  targets; publication is not an atomic replacement of the entire website.
+- Display failures and warnings in a read-only diagnostics buffer without
+  permanently registering Org Publish projects, installing global advice or
+  changing global export settings.

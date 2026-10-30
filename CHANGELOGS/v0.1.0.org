@@ -1,0 +1,39 @@
+#+title: v0.1.0 Release Notes
+
+Initial release of =org-roam-blog=, an Emacs package for publishing a static
+HTML blog from an Org-roam database selection.
+
+* What's included
+- Select level-0 Org-roam nodes by required tag sets.
+- Publish content into a canonical store that preserves source-relative paths.
+- Generate optional HTML redirect pages for public alias paths.
+- Generate a sitemap with publication-time sorting and a visible-tag whitelist.
+- Generate a native Org concept index from =#+INDEX=, preserving file,
+  headline, =CUSTOM_ID=, =ID=, hierarchy, and grouping semantics.
+- Publish explicitly configured static resources.
+- Configure generated documents through scoped export templates, dynamic
+  bindings, and body functions.
+- Preserve standard Org export hooks, filters, and file-local settings.
+- Validate paths, configuration, runtime capabilities, and output conflicts
+  before publication.
+- Stage generated output before promoting it to the publication directory.
+- Avoid permanent changes to =org-publish-project-alist=, global advice, or
+  global export state.
+
+* Requirements
+- Emacs 30.1 or later
+- Org 9.5 or later
+- Org-roam 2.3.1 or later
+- A user-synchronized Org-roam database
+
+* Current boundaries
+This release does not:
+
+- synchronize or repair the Org-roam database;
+- infer or update publication timestamps;
+- delete stale output;
+- automatically publish node-bundle attachments;
+- rewrite links in ordinary content pages;
+- generate feeds;
+- provide publish-on-save behavior;
+- deploy the generated website.
