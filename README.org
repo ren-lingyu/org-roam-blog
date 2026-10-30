@@ -1,5 +1,5 @@
-#+TITLE: Org Roam Blog
-#+AUTHOR: aRenCoco
+#+title: Org Roam Blog
+#+author: aRenCoco
 
 * Overview
 Org-roam-blog is an Emacs package for publishing a static HTML blog from an Org-roam database selection. It selects level-0 Org-roam nodes by tag sets, exports their files through the standard Org HTML exporter, mirrors their source-relative paths into a publication store, and can generate public redirect pages, a sitemap, a native Org index, and static-file mappings.
@@ -7,7 +7,7 @@ Org-roam-blog is an Emacs package for publishing a static HTML blog from an Org-
 The package treats the synchronized Org-roam database and saved files on disk as its inputs. It does not synchronize Org-roam, modify source Org files, infer publication times, deploy the resulting website, or permanently register projects in =org-publish-project-alist=.
 
 * Repository Structure
-#+BEGIN_SRC text
+#+begin_src text
   .
   ├── flake.nix
   ├── flake.lock
@@ -35,7 +35,7 @@ The package treats the synchronized Org-roam database and saved files on disk as
           ├── test.nix
           ├── test-overlay.nix
           └── run.scm
-#+END_SRC
+#+end_src
 
 Key conventions:
 
@@ -128,7 +128,7 @@ are promoted.
 * Content Rules
 Each element of =org-roam-blog-content= is a plist with this schema:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
   (list :name "post"
         :tags '("blog" "post")
         :directory "posts"
@@ -138,7 +138,7 @@ Each element of =org-roam-blog-content= is a plist with this schema:
                         :section-numbers t)
         :bindings (list (cons 'org-html-postamble t))
         :body (list #'my-blog-article-status))
-#+END_SRC
+#+end_src
 
 The fields have the following meanings:
 
@@ -156,16 +156,16 @@ One real file matching more than one content rule is an unsupported configuratio
 * Store and Redirect Layout
 Every selected content file is exported below =org-roam-blog-publish-store= using its path relative to =org-roam-blog-directory=:
 
-#+BEGIN_SRC text
+#+begin_src text
   <blog-directory>/permanent/<uuid>/post.org
     -> <publish-directory>/_store/permanent/<uuid>/post.html
-#+END_SRC
+#+end_src
 
 For a matching rule with =:directory "posts"=, the package additionally generates:
 
-#+BEGIN_SRC text
+#+begin_src text
   <publish-directory>/posts/post.html
-#+END_SRC
+#+end_src
 
 This public file redirects to the store page using a relative URL. The redirect directory does not change the canonical store layout. Set =:directory= to nil, or omit it, when no public redirect is needed.
 
@@ -174,7 +174,7 @@ The =:template= in =org-roam-blog-export-default= and each object's =:template= 
 
 For example, a default template can disable a table of contents and section numbering, while a post rule selectively enables both:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
   (setq org-roam-blog-export-default
         (list :template
               (list :with-toc nil
@@ -186,7 +186,7 @@ For example, a default template can disable a table of contents and section numb
                     :sitemap t
                     :template (list :with-toc t
                                     :section-numbers t))))
-#+END_SRC
+#+end_src
 
 Selected files are read from disk into fresh temporary buffers and passed to =org-export-to-file=. Standard Org export hooks and filters remain active, and saved =#+OPTIONS= and =#+HTML_*= settings continue to apply. Unsaved visiting-buffer changes are not published.
 
@@ -206,7 +206,7 @@ This provides a local environment for settings that are not conveniently represe
 
 The following standalone example configures only dynamic bindings:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
   (setq org-roam-blog-export-default
         (list
          :bindings
@@ -223,16 +223,16 @@ The following standalone example configures only dynamic bindings:
           (cons 'org-export-filter-body-functions
                 (cons #'my-blog-body-filter
                       org-export-filter-body-functions)))))
-#+END_SRC
+#+end_src
 
 Each content rule, sitemap configuration, and theindex configuration accepts a =:bindings= alist. Object bindings replace defaults with the same symbol and retain all other defaults:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
   (list :name "index"
         :tags '("blog" "index")
         :directory "."
         :bindings (list (cons 'org-html-postamble-format nil)))
-#+END_SRC
+#+end_src
 
 Binding values are ordinary configured values, not forms evaluated by Org-roam-blog. Construct dynamic strings and hook lists when building the configuration. Static-resource copying and redirect generation do not invoke the Org exporter and therefore do not use export bindings.
 
@@ -241,7 +241,7 @@ For sitemap export, the binding scope includes both =:renderer= and =org-export-
 * Body Functions
 The =:body= field provides a package-level transformation stage without requiring a user function to dispatch on the concrete export backend. Default functions in =org-roam-blog-export-default= run first, followed by the functions configured for the current content rule, sitemap, or theindex. Each function receives one context plist and must return the replacement body string:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
   (lambda (context)
     (concat (plist-get context
                        :body)
@@ -250,7 +250,7 @@ The =:body= field provides a package-level transformation stage without requirin
                            :published-time)
                 "at an unspecified time")
             "</p>"))
-#+END_SRC
+#+end_src
 
 The context provides:
 
@@ -269,18 +269,18 @@ This interface supplies publication context; it does not define a website theme.
 * Publication Time
 =org-roam-blog-published-property= names the Org-roam node property used as the publication time. The default property can be maintained in the file-level property drawer:
 
-#+BEGIN_SRC org
+#+begin_src org
   :PROPERTIES:
   :ID:        00000000-0000-0000-0000-000000000000
   :PUBLISHED: [2026-07-30 Thu 15:30]
   :END:
-#+END_SRC
+#+end_src
 
 To use an existing property convention:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
   (setq org-roam-blog-published-property "PDATE")
-#+END_SRC
+#+end_src
 
 The publication time and file modification time are both read from the Org-roam database. Org-roam-blog never creates, updates, or infers the publication property because a local export does not establish when content was actually deployed.
 
@@ -289,7 +289,7 @@ The default sitemap displays the publication property when present. With anti-ch
 * Sitemap
 =org-roam-blog-sitemap= uses =:enable= to explicitly enable or disable generation:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
   (setq org-roam-blog-sitemap
         (list :enable t
               :path "sitemap.html"
@@ -298,7 +298,7 @@ The default sitemap displays the publication property when present. With anti-ch
                       "#+DESCRIPTION: Published posts\n")
               :sort 'anti-chronologically
               :visible-tags '("emacs" "lisp")))
-#+END_SRC
+#+end_src
 
 The supported fields are:
 
@@ -314,17 +314,17 @@ The supported fields are:
 
 A custom renderer is called as:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
   (funcall renderer
            (list :entries entries
                  :config config))
-#+END_SRC
+#+end_src
 
 The context =:entries= have already been filtered by content-rule =:sitemap= fields, sorted, and projected through =:visible-tags=. Each entry retains its manifest metadata, including =:published-time= and =:modified-time=. =:config= is the validated sitemap plist. The renderer must return an Org source fragment string; an empty string is valid. It may include supporting keywords such as =#+HTML_HEAD_EXTRA=. Org-roam-blog prefixes =:preamble=, then exports and writes the resulting sitemap.
 
 For example:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
   (setq org-roam-blog-sitemap
         (list :enable t
               :path "sitemap.html"
@@ -336,12 +336,12 @@ For example:
                                           :entries)))
                   (format "Published entries: %d\n"
                           (length entries))))))
-#+END_SRC
+#+end_src
 
 * Org Index
 =org-roam-blog-theindex= optionally generates the standard Org index:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
   (setq org-roam-blog-theindex
         (list :enable t
               :path "theindex.html"
@@ -353,7 +353,7 @@ For example:
                       "#+END_abstract\n")
               :template (list :with-toc nil
                               :section-numbers nil)))
-#+END_SRC
+#+end_src
 
 Only manifest entries selected by a content rule with non-nil =:theindex= contribute =#+INDEX= entries. The package reuses =org-publish-collect-index=, =org-publish-index-generate-theindex=, and the standard HTML exporter, retaining native file-level, headline, =CUSTOM_ID=, =ID=, term hierarchy, grouping, and duplicate-location semantics.
 
@@ -373,12 +373,12 @@ Native index links initially refer to the real source files. During only the fin
 * Static Resources
 Each element of =org-roam-blog-static= maps an absolute source directory to a publication-relative directory:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
   (setq org-roam-blog-static
         (list (list :source "/home/user/site-static/"
                     :directory "static"
                     :extensions "css\\|js\\|svg\\|png")))
-#+END_SRC
+#+end_src
 
 The supported fields are:
 
@@ -397,9 +397,9 @@ This package does not provide a minor mode or install default keybindings. Its p
 
 First validate the configuration and required runtime capabilities:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
   (org-roam-blog-check)
-#+END_SRC
+#+end_src
 
 The check is read-only. It validates configuration shapes, configured root directories, and the runtime APIs required by enabled features. It does not query publication content, enumerate static files, synchronize Org-roam, construct an output plan, create directories, export files, or alter global Org Publish state. Configuration or capability diagnostics are displayed in =*Org-roam Blog Diagnostics*=.
 
@@ -407,9 +407,9 @@ Static attachment capability is required only when =org-roam-blog-static= is non
 
 Run a complete publication with:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
   (org-roam-blog-publish)
-#+END_SRC
+#+end_src
 
 Publication performs these phases:
 
@@ -426,7 +426,7 @@ Successful publication removes its staging directory. A generation or promotion 
 * Example Configuration
 The following example publishes index-tagged content through redirects at the website root, publishes post-tagged content through redirects below =posts/=, and includes posts in a sitemap:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
   (use-package org-roam-blog
     :straight (:host github :repo "ren-lingyu/org-roam-blog")
     :after org-roam
@@ -471,7 +471,7 @@ The following example publishes index-tagged content through redirects at the we
      (list :enable t
            :path "theindex.html"
            :preamble "#+TITLE: Index\n")))
-#+END_SRC
+#+end_src
 
 Run =org-roam-blog-check= after changing the configuration and synchronize Org-roam before publishing saved content.
 
