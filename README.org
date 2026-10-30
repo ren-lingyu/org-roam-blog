@@ -11,6 +11,9 @@ The package treats the synchronized Org-roam database and saved files on disk as
   .
   ├── flake.nix
   ├── flake.lock
+  ├── CHANGELOG.org
+  ├── CHANGELOGS/
+  │   └── v0.1.0.org
   ├── lisp/
   │   └── org-roam-blog.el
   ├── pkgs/
@@ -40,11 +43,12 @@ The package treats the synchronized Org-roam database and saved files on disk as
 Key conventions:
 
 - =lisp/org-roam-blog.el= is the package implementation and public entry point.
-- =pkgs/= defines the MELPA package and an Emacs wrapper through =package.nix= and =overlay.nix= pairs.
+- =pkgs/= defines the package using Nixpkgs' =melpaBuild= helper and an Emacs wrapper through =package.nix= and =overlay.nix= pairs.
 - =flake.nix= wires package overlays, development shells, checks, and formatting through the personal-nixpkgs framework. It exposes the named =org-roam-blog= package and the =emacs= wrapper, without a default package. Use =nix build .#org-roam-blog= or =nix build .#emacs= to select one explicitly.
 - Each check suite uses =test.nix= and =test-overlay.nix=, discovered through =tests/default.nix=.
 - =tests/ert/ert.el= contains the ERT test suite.
 - =tests/package-lint/test.nix= runs package-lint against the packaged Elisp source.
+- =CHANGELOG.org= summarizes version changes; =CHANGELOGS/= contains the standalone per-version release manuscripts.
 
 * Features
 The package includes the following main features:
@@ -118,7 +122,7 @@ The following options customize shared behavior:
 - =org-roam-blog-temporary-directory=: Optional existing non-symlink parent directory for per-publication staging directories; Org-roam-blog does not create this root
 - =org-roam-blog-site-url=: Optional public HTTP or HTTPS URL corresponding to the publication root
 
-=org-roam-blog-site-url= must end with a slash and may contain a deployment subpath, such as =https://example.org/blog/=. Internal links and redirects currently prefer relative URLs; the option is reserved for output that requires an absolute URL.
+=org-roam-blog-site-url= must end with a slash and may contain a deployment subpath, such as =https://example.org/blog/=. Queries and fragments are not allowed. The option is validated but does not currently affect generated URLs. It is reserved for output that requires an absolute site URL.
 
 When =org-roam-blog-publish-store= already exists, it must be a
 non-symlink directory below =org-roam-blog-publish-directory=.  A
@@ -262,6 +266,8 @@ The context provides:
 - =:config=: Current content rule, sitemap configuration, or theindex configuration
 - =:title=, =:source=, =:source-relative=, =:content-name=, =:tags=, =:published-time=, =:modified-time=, =:store-relative=, and =:redirect-relative=: Convenience values copied from the current entry
 
+For sitemap and index documents, =:entry= and its convenience fields are nil. Treat the context and referenced configuration data as read-only.
+
 Effective native =org-export-filter-body-functions= run before this pipeline. The package appends its adapter only for the current export and restores the previous filter list afterwards. Body functions run before the backend assembles its final document template, so HTML head, preamble, postamble, and footer configuration remains the responsibility of native exporter options and bindings. Returning a non-string value aborts the generated batch.
 
 This interface supplies publication context; it does not define a website theme. Article status, license blocks, and other site-specific markup belong in user functions.
@@ -395,6 +401,7 @@ Static resources are copied directly to their final destinations through =org-pu
 * Usage
 This package does not provide a minor mode or install default keybindings. Its public commands can be called interactively or from user configuration.
 
+** Configuration Check
 First validate the configuration and required runtime capabilities:
 
 #+begin_src emacs-lisp
@@ -405,6 +412,7 @@ The check is read-only. It validates configuration shapes, configured root direc
 
 Static attachment capability is required only when =org-roam-blog-static= is non-empty. Native index collector, generator, and cache APIs are required only when =org-roam-blog-theindex= is enabled.
 
+** Publication Workflow
 Run a complete publication with:
 
 #+begin_src emacs-lisp
@@ -421,14 +429,40 @@ Publication performs these phases:
 6. Copy static resources directly to their final destinations.
 7. Promote generated content, followed by the sitemap, theindex, and redirects.
 
-Successful publication removes its staging directory. A generation or promotion failure retains the staging directory for inspection and reports any already published targets. Generated targets are replaced one file at a time, so promotion is not an atomic replacement of the entire website.
+Each publication creates a unique staging directory below =org-roam-blog-temporary-directory=, or =temporary-file-directory= when that option is nil. Successful publication removes that directory. Static resources bypass staging, and generated targets are replaced one file at a time; publication is not an atomic replacement of the entire website.
+
+** Publication Result
+=org-roam-blog-publish= returns a result plist with the following fields:
+
+| Field               | Meaning                                                                                                       |
+|---------------------+---------------------------------------------------------------------------------------------------------------|
+| =:status=           | The symbol =success= or =failure=.                                                                            |
+| =:staging=          | Retained staging-directory path on failure; nil after success or when preflight failed before staging began.  |
+| =:static-published= | Absolute target paths whose static copies completed, in publication order.                                    |
+| =:promoted=         | Absolute target paths whose generated files were promoted, in promotion order.                                |
+| =:plan=             | Combined content, redirect, sitemap, index and static output plan when available; preflight may leave it nil. |
+| =:diagnostics=      | Diagnostic plists containing =:severity=, =:subject= and =:message=.                                          |
+
+Plan items contain =:kind= (=content=, =redirect=, =sitemap=, =theindex= or =static=), =:source=, the absolute =:target= and the configuration =:owner=. Diagnostic severities are =error= or =warning=. Use =:status= to determine the outcome: warnings may accompany successful publication.
+
+** Failure Recovery
+- A preflight failure writes no publication output and creates no staging directory.
+- A generation failure leaves final output unchanged and retains the created staging directory for inspection.
+- A static-copy failure can leave completed static copies in place, but prevents generated-file promotion and retains staging.
+- A promotion failure leaves completed static copies and already promoted generated files in place and retains staging. A staging-cleanup error can also report failure after all generated files have been written.
+
+Failures handled by the publication pipeline display =*Org-roam Blog Diagnostics*= and return the result above. The result records completed writes; those writes are not rolled back. Inspect the diagnostics, retained staging and affected targets before retrying. A later publication uses a new staging directory rather than automatically cleaning up staging retained by an earlier failure.
 
 * Example Configuration
 The following example publishes index-tagged content through redirects at the website root, publishes post-tagged content through redirects below =posts/=, and includes posts in a sitemap:
 
+For manual loading from a checkout, add its =lisp/= directory to =load-path=. The straight recipe below explicitly selects the Elisp files from that directory.
+
 #+begin_src emacs-lisp
   (use-package org-roam-blog
-    :straight (:host github :repo "ren-lingyu/org-roam-blog")
+    :straight (:host github
+               :repo "ren-lingyu/org-roam-blog"
+               :files ("lisp/*.el"))
     :after org-roam
     :custom
     (org-roam-blog-directory "/home/user/org/")
@@ -475,8 +509,8 @@ The following example publishes index-tagged content through redirects at the we
 
 Run =org-roam-blog-check= after changing the configuration and synchronize Org-roam before publishing saved content.
 
-* v0.1.0 Boundaries
-The first release intentionally does not provide the following behavior:
+* Boundaries
+Current publication does not provide the following behavior:
 
 - Synchronizing or repairing the Org-roam database
 - Creating, updating, or inferring the publication property
