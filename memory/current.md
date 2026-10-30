@@ -48,7 +48,8 @@ migration. No further alignment step remains.
 
 Changelog work is complete and committed in three user-created project
 commits: initial historical summary/manuscript, tagged-source manuscript
-expansion, and the root Unreleased summary. The project worktree is clean.
+expansion, and the root Unreleased summary. The project worktree was clean
+when the subsequent README audit began.
 The user confirms v0.1.0 was the first version and release. Local and public
 GitHub v0.1.0 tag objects agree; the public release is not a draft or prerelease.
 Historical content uses the tag's source, README and tests as primary evidence,
@@ -86,15 +87,34 @@ the v0.1.0 and current publisher source token streams equal after ignoring
 comments and whitespace outside strings; this is not an Emacs reader or runtime
 test. No new ERT, Nix, formatting, deployment or publication run was performed.
 
-The next task is the user's authorized README update, after first persisting
-this changelog-completion checkpoint. Use the current committed HEAD as the
-README implementation baseline, not v0.1.0. Audit existing README coverage
-before editing, avoid duplication, and add or correct useful detailed public
-interfaces, configuration semantics, result fields, publication sequencing,
-partial-failure and staging behavior omitted from release notes. Preserve
-accurate existing text and limit project edits to `README.org`. Project staging
-and commits remain human operations. Generate requested commit-message claims
-from the staged candidate only.
+The requested changelog-completion checkpoint was created before README work,
+with the completed project HEAD as its additional parent. README editing then
+used committed HEAD `9b806c70e805f5c6afff2219a623a1f1cc23fced` as its implementation
+baseline, not v0.1.0. The user committed the resulting `README.org` changes as
+`docs(readme): document publication results and failure recovery`; the project
+worktree is clean. No source, changelog or configuration files were changed
+in that README commit.
+
+Existing README already covered export merge rules, body context fields,
+native index artifacts and link filtering, and the seven publication stages.
+The update avoids repeating that material. It adds the public publication-result
+fields, plan/diagnostic item shapes, warning-versus-status interpretation and
+stage-specific failure/recovery behavior, including partial writes, cleanup
+failure and retention of earlier failed staging. It clarifies nil convenience
+fields and read-only body context, the reserved site URL's lack of current URL
+effects, and current rather than first-release boundaries. The repository tree
+now includes the changelog documents; packaging wording names Nixpkgs
+`melpaBuild`. The straight example explicitly selects `lisp/*.el`, and manual
+loading guidance uses `lisp/`. The upstream straight README's documented
+`:files` glob behavior was consulted read-only to verify that recipe syntax.
+
+The entire resulting README, its diff, tracked paths and affected HEAD source
+were inspected, and Git whitespace checking passed. No build, ERT, formatter,
+link checker, installation or publication test was run. Changelog and README
+work are complete; no follow-up task remains within the agreed scope. Resume
+by confirming the next objective and current source state. Project staging
+and commits remain human operations; requested commit messages use staged
+candidates rather than unstaged changes.
 
 Use version identity and human-only state/time boundaries from the adopted
 profile. The new historical CLOSED is derived from the tagged commit's UTC
