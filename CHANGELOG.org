@@ -6,6 +6,28 @@
 Notable user-visible changes, newest first. Version links lead to the complete
 release notes. Entries follow Keep a Changelog categories in Org format.
 
+* TODO Unreleased
+Changes since v0.1.0.
+
+** Changed
+- *Breaking:* Move the Elisp source into =lisp/=. Add that directory to manual
+  =load-path= configurations and update straight recipes to include
+  =lisp/*.el=. The public entry remains =(require 'org-roam-blog)=.
+- *Breaking:* Rename the default Nix package output to =org-roam-blog=
+  and add a separate =emacs= output with Org-roam Blog installed.
+  Use =nix build .#org-roam-blog= or =nix build .#emacs=; no default
+  package remains.
+- Use personal-nixpkgs for flake composition and Nixpkgs' =melpaBuild= helper
+  to build the package.
+  Packages and development shells now follow the default Nixpkgs Emacs
+  package set rather than explicitly selecting =emacs31=.
+
+** Added
+- An exported =overlays.emacsPackages= overlay for downstream Emacs package
+  sets and =legacyPackages.<system>= outputs for the configured package set.
+- A treefmt formatting check alongside ERT and package-lint in the
+  =nix flake check= workflow.
+
 * DONE v0.1.0
 CLOSED: [2026-07-31 Fri 09:11]
 :PROPERTIES:
