@@ -1,32 +1,112 @@
 #+title: v0.1.0 Release Notes
 
+* Overview
 Initial release of =org-roam-blog=, an Emacs package for publishing a static
 HTML blog from an Org-roam database selection.
 
-* What's included
-- Select level-0 Org-roam nodes by required tag sets.
-- Publish content into a canonical store that preserves source-relative paths.
-- Generate optional HTML redirect pages for public alias paths.
-- Generate a sitemap with publication-time sorting and a visible-tag whitelist.
-- Generate a native Org concept index from =#+INDEX=, preserving file,
-  headline, =CUSTOM_ID=, =ID=, hierarchy, and grouping semantics.
-- Publish explicitly configured static resources.
-- Configure generated documents through scoped export templates, dynamic
-  bindings, and body functions.
-- Preserve standard Org export hooks, filters, and file-local settings.
-- Validate paths, configuration, runtime capabilities, and output conflicts
-  before publication.
-- Stage generated output before promoting it to the publication directory.
-- Avoid permanent changes to =org-publish-project-alist=, global advice, or
-  global export state.
+* Added
+** Content selection and HTML publication
+- Select level-0 Org-roam nodes matching every tag in a content rule.
+  =org-roam-blog-directory= limits eligible files and defines the root for
+  source-relative paths. One real file matching multiple rules is diagnosed
+  as an unsupported configuration before publication writes begin.
+- Publish selected files through the standard Org HTML exporter into
+  =org-roam-blog-publish-store=, defaulting to =_store=. Preserve source-relative
+  paths and change the file extension to =.html=.
+- Export saved files from disk rather than unsaved visiting-buffer contents.
+  Manifest titles, tags, publication properties and cached modification times
+  come from the synchronized Org-roam database.
+- Generate optional public alias pages using each source basename and the
+  content rule's =:directory=. Redirects use relative store URLs and include
+  refresh, JavaScript, canonical-link and ordinary-link fallbacks.
+
+** Sitemap
+- Include content selected by each rule's =:sitemap= field. Optional
+  =:sort 'anti-chronologically= orders parseable publication times newest
+  first, followed by undated entries in their manifest order.
+- Read publication times from =org-roam-blog-published-property=, defaulting
+  to =PUBLISHED=. The default renderer displays that property when present;
+  cached modification time remains metadata rather than a displayed date.
+- Display only tags listed in =:visible-tags=. A missing or nil whitelist
+  displays no tags; this setting does not select publication content.
+- Accept =:preamble= as Org source before the sitemap body. A custom
+  =:renderer= receives a context plist containing prepared =:entries= and
+  =:config=, and must return an Org-source fragment string. Entries have
+  already been selected, sorted and filtered for visible tags.
+
+** Native Org concept index
+- Collect =#+INDEX= entries only from content rules with non-nil =:theindex=.
+  Reuse the native Org Publish collector and generator, preserving file,
+  headline, =CUSTOM_ID=, =ID=, hierarchy, grouping and duplicate-location
+  semantics.
+- Accept Org-source =:preamble= content before the generated index and
+  export the result to the configured =:path=.
+- Map native source-file hrefs to publication-store URLs only during the
+  index's HTML export, after existing user link filters. Preserve Org's
+  fragments and leave unrelated links unchanged. Ordinary content pages
+  retain the exporter's native link behavior.
+- Generate the index without permanently changing global Org Publish state,
+  installing advice or creating shadow symlinks.
+
+** Scoped export customization
+- Configure defaults through =org-roam-blog-export-default= and override
+  them per content rule, sitemap or index. =:template= supplies native export
+  options with shallow overrides; =:bindings= overrides dynamic variables by
+  symbol. Explicit nil values replace defaults in either interface.
+- Apply native body filters before the context-aware =:body= pipeline.
+  Default body functions run before object-specific functions, each receiving
+  a context plist and returning the replacement body string. An omitted or
+  nil object body list inherits the default functions.
+- Preserve standard Org export hooks, filters and file-local settings.
+  Dynamic bindings cover one document's preparation and export and restore
+  previous values on success or failure. Sitemap bindings also cover its
+  renderer. Static copying and redirects do not use these export settings.
+
+** Static resources
+- Recursively publish explicitly configured source directories through
+  =org-publish-attachment=, preserving paths relative to each static source.
+  =:extensions= can restrict selected file extensions; omission uses the
+  built-in CSS, JavaScript, image, PDF and web-font extension selection.
+- Do not follow symlinked directories, and reject selected files whose real
+  paths escape the configured static source. Static resources participate
+  in the combined output-conflict checks.
+
+** Publication and diagnostics
+- =org-roam-blog-check= checks configuration shapes, configured root
+  directories and required runtime capabilities. It does not query content,
+  enumerate static inputs, construct an output plan or write publication
+  files. Static attachment APIs are required only for configured static
+  resources; native index APIs are required only when the index is enabled.
+- =org-roam-blog-publish= validates the complete content and static output
+  plan before writing, rejecting conflicts and unsafe targets. It stages all
+  generated pages before copying static resources directly to their final
+  destinations, then publishes the generated pages after static copying
+  succeeds.
+- Preflight or generation failure leaves final output unchanged. Static
+  copying or generated-page publication can fail after some targets have
+  been written; publication does not atomically replace the entire website.
+- Report failures in the read-only =*Org-roam Blog Diagnostics*= buffer.
+  The returned result records publication status, diagnostics, any retained
+  staging directory and targets already published, supporting diagnosis of
+  partial updates without permanently changing global export settings.
+
+** Nix packaging and development
+- Provide a default Nix flake package and a development shell containing the
+  package and =package-lint=, using the Nixpkgs =emacs31= package set. The
+  package source in this release is =org-roam-blog.el= at the repository root.
+- Provide ERT and package-lint checks through =nix flake check=.
 
 * Requirements
 - Emacs 30.1 or later
 - Org 9.5 or later
 - Org-roam 2.3.1 or later
 - A user-synchronized Org-roam database
+- Existing absolute, non-symlink source and publication root directories.
+  The publication command may create missing store subdirectories, but does
+  not create the publication root. A configured temporary parent directory
+  must also already exist as a non-symlink directory.
 
-* Current boundaries
+* Limitations
 This release does not:
 
 - synchronize or repair the Org-roam database;
@@ -37,3 +117,8 @@ This release does not:
 - generate feeds;
 - provide publish-on-save behavior;
 - deploy the generated website.
+
+=org-roam-blog-site-url= is reserved for output requiring absolute site URLs.
+It validates an optional HTTP(S) root ending in a slash, but does not affect
+this release's production output. The package supplies export customization,
+not a site theme, content-management system or minor mode.
